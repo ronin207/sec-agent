@@ -1,0 +1,36 @@
+# Node.js related files
+node_modules/
+build/
+.env
+
+# Python related files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environment
+venv/
+
+# macOS related files
+.DS_Store
+
+# Logs
+*.log
+
+# Editor related files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+*.cover
+*.coverage
+
+# Miscellaneous
+*.bak
+*.tmp
+*.temp
