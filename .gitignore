@@ -30,6 +30,11 @@ coverage/
 *.cover
 *.coverage
 
+# Data directory with sensitive information and large files
+data/
+data/chroma/
+data/sources/
+
 # Miscellaneous
 *.bak
 *.tmp
