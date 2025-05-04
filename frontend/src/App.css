@@ -1,0 +1,561 @@
+/* Gemini-inspired design system */
+:root {
+  --gemini-primary: #8e24aa;
+  --gemini-primary-light: #a64eb6;
+  --gemini-secondary: #4285f4;
+  --gemini-text: #202124;
+  --gemini-text-secondary: #5f6368;
+  --gemini-background: #ffffff;
+  --gemini-card: #ffffff;
+  --gemini-border: #dadce0;
+  --gemini-error: #d93025;
+  --gemini-success: #188038;
+  --gemini-warning: #e37400;
+  --font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+body {
+  background-color: var(--gemini-background);
+  margin: 0;
+  padding: 0;
+  color: var(--gemini-text);
+}
+
+.App {
+  text-align: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
+  font-family: var(--font-family);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Main content area */
+main {
+  flex: 1;
+  padding: 4rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* App title */
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--gemini-primary);
+  margin-bottom: 3rem;
+}
+
+/* Form styles */
+.scan-form {
+  width: 100%;
+  max-width: 700px;
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  display: flex;
+  width: 100%;
+  background-color: var(--gemini-card);
+  border-radius: 24px;
+  padding: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--gemini-border);
+  position: relative;
+}
+
+.url-input {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  background: transparent;
+  color: var(--gemini-text);
+  font-family: var(--font-family);
+  padding-right: 3rem;
+}
+
+.url-input:focus {
+  outline: none;
+}
+
+/* Icon button style */
+.scan-button {
+  background: none;
+  border: none;
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.scan-button:hover {
+  background-color: rgba(142, 36, 170, 0.1);
+}
+
+.scan-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scan-icon {
+  color: var(--gemini-primary);
+  font-size: 1.5rem;
+}
+
+.error-message {
+  color: var(--gemini-error);
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Loading indicator */
+.loading {
+  margin: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loading p {
+  color: var(--gemini-text-secondary);
+  margin-top: 1rem;
+  font-size: 1.1rem;
+}
+
+/* Animated loading dots */
+.loading:before {
+  content: "";
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid #e6e6e6;
+  border-top-color: var(--gemini-primary);
+  animation: loading-spinner 1s infinite linear;
+}
+
+@keyframes loading-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Report Container */
+.report-container {
+  width: 100%;
+  max-width: 800px;
+  background-color: var(--gemini-card);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  text-align: left;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+/* Report Header */
+.report-header {
+  margin-bottom: 2rem;
+}
+
+.report-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.report-title h2 {
+  color: var(--gemini-primary);
+  margin: 0;
+  font-weight: 500;
+  font-size: 1.8rem;
+}
+
+.results-icon {
+  font-size: 1.8rem;
+  margin-right: 1rem;
+}
+
+.report-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+  background-color: rgba(142, 36, 170, 0.05);
+  border-radius: 12px;
+}
+
+.report-url, .report-time, .report-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.meta-label {
+  color: var(--gemini-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.meta-value {
+  color: var(--gemini-text);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* Report Sections */
+.report-section {
+  margin-bottom: 2.5rem;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.section-title {
+  padding: 1rem 1.5rem;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: var(--gemini-secondary);
+  font-weight: 500;
+  font-size: 1.2rem;
+  border-left: 4px solid var(--gemini-secondary);
+  border-radius: 8px 8px 0 0;
+}
+
+.error-title {
+  background-color: rgba(217, 48, 37, 0.1);
+  color: var(--gemini-error);
+  border-left-color: var(--gemini-error);
+}
+
+.summary-content {
+  padding: 1.5rem;
+  background-color: white;
+  border: 1px solid var(--gemini-border);
+  border-top: none;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--gemini-text);
+}
+
+/* Scan results wrapper */
+.scan-results-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background-color: white;
+  border: 1px solid var(--gemini-border);
+  border-top: none;
+}
+
+/* Scan results section */
+.scan-result-section {
+  padding: 1.5rem;
+  background-color: var(--gemini-card);
+  border-radius: 12px;
+  border: 1px solid var(--gemini-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.scan-result-section h3 {
+  color: var(--gemini-secondary);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+}
+
+.result-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.domain-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: rgba(66, 133, 244, 0.1);
+  border-radius: 50px;
+  font-weight: 500;
+  color: var(--gemini-secondary);
+  max-width: fit-content;
+}
+
+.domain-icon {
+  margin-right: 8px;
+}
+
+.analysis {
+  line-height: 1.6;
+  color: var(--gemini-text);
+}
+
+.analysis h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--gemini-text);
+  font-weight: 500;
+  font-size: 1.1rem;
+}
+
+/* Vulnerabilities container */
+.vulnerabilities-container {
+  padding: 1.5rem;
+  background-color: white;
+  border: 1px solid var(--gemini-border);
+  border-top: none;
+}
+
+.vulnerabilities-container h3 {
+  display: flex;
+  align-items: center;
+  color: var(--gemini-error);
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.icon-warning {
+  margin-right: 10px;
+}
+
+/* No vulnerabilities indicator */
+.no-vulnerabilities {
+  background-color: rgba(24, 128, 56, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--gemini-success);
+}
+
+.success-icon {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+/* Vulnerability cards */
+.vulnerability-card {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background-color: var(--gemini-card);
+  border-radius: 12px;
+  border-left: 4px solid var(--gemini-error);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.vulnerability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.vulnerability-card h4 {
+  color: var(--gemini-error);
+  margin: 0;
+  font-weight: 500;
+  font-size: 1.2rem;
+}
+
+.severity-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.severity-badge.high {
+  background-color: rgba(217, 48, 37, 0.1);
+  color: var(--gemini-error);
+}
+
+.severity-badge.medium {
+  background-color: rgba(227, 116, 0, 0.1);
+  color: var(--gemini-warning);
+}
+
+.severity-badge.low {
+  background-color: rgba(234, 179, 8, 0.1);
+  color: #ea580c;
+}
+
+.vulnerability-card p {
+  margin: 0 0 1rem;
+  line-height: 1.6;
+  color: var(--gemini-text);
+}
+
+.recommendation {
+  padding: 1rem;
+  background-color: rgba(66, 133, 244, 0.05);
+  border-radius: 8px;
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+}
+
+/* Recommendations section */
+.recommendations-content {
+  padding: 1.5rem;
+  background-color: white;
+  border: 1px solid var(--gemini-border);
+  border-top: none;
+}
+
+.recommendation-list {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.recommendation-item {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+  color: var(--gemini-text);
+}
+
+.recommendation-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Error section */
+.error-section {
+  margin: 1.5rem;
+  padding: 1.5rem;
+  background-color: rgba(217, 48, 37, 0.05);
+  border-radius: 12px;
+  border-left: 4px solid var(--gemini-error);
+}
+
+.error-section h3 {
+  color: var(--gemini-error);
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.error-icon {
+  margin-right: 8px;
+}
+
+/* Scan history section */
+.scan-history {
+  width: 100%;
+  max-width: 800px;
+  margin: 2rem 0;
+}
+
+.scan-history h3 {
+  color: var(--gemini-text);
+  font-weight: 500;
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: var(--gemini-card);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-item:hover {
+  background-color: rgba(142, 36, 170, 0.05);
+}
+
+.history-url {
+  font-weight: 500;
+  color: var(--gemini-primary);
+}
+
+.history-time {
+  color: var(--gemini-text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Footer */
+footer {
+  margin-top: 2rem;
+  color: var(--gemini-text-secondary);
+  font-size: 0.9rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--gemini-border);
+  width: 100%;
+}
+
+/* Status indicator */
+.status {
+  display: inline-block;
+  font-weight: 500;
+  color: var(--gemini-success);
+  padding: 0.5rem 1rem;
+  background-color: rgba(24, 128, 56, 0.1);
+  border-radius: 16px;
+  font-size: 0.9rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .form-group {
+    flex-direction: column;
+    border-radius: 16px;
+  }
+  
+  .url-input {
+    margin-bottom: 0.8rem;
+    text-align: center;
+  }
+  
+  .scan-button {
+    width: 100%;
+    margin-right: 0;
+  }
+  
+  .App-header {
+    padding: 1.5rem 1rem;
+  }
+  
+  .App-header h1 {
+    font-size: 2rem;
+  }
+  
+  .report-meta {
+    grid-template-columns: 1fr;
+  }
+  
+  .vulnerability-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
