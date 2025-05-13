@@ -1,0 +1,66 @@
+Context
+We are developing a Security AI Agent that automates vulnerability assessments for websites and smart contracts. The system works by accepting user input, reasoning over known CVEs, dynamically selecting security tools to scan the target, and producing a merged vulnerability report.
+
+Your Task
+Please generate a Python library with the following functionality:
+
+✅ Library Requirements
+Input Handling
+
+Accept either:
+
+A website URL (e.g., https://target.com)
+
+A Solidity source code or repository URL (e.g., https://github.com/user/repo/contract.sol)
+
+Validate and classify the input as either website or solidity_contract.
+
+CVE Knowledge Base Query
+
+Define a function that interacts with the OpenAI API (GPT-4o-mini) to:
+
+Retrieve known CVEs related to the provided input.
+
+Summarize the risks.
+
+You may simulate the CVE knowledge base lookup for now with a mock database or stub.
+
+Security Tool Selection
+
+Based on the identified CVEs or input type, define logic to select appropriate security tools, for example:
+
+For websites: OWASP ZAP, Nikto, Wappalyzer (mock APIs acceptable)
+
+For Solidity contracts: Mythril, Slither (mock APIs acceptable)
+
+Scan Execution
+
+Provide API integration functions (mocked or actual) that:
+
+Call the selected tools.
+
+Retrieve and standardize the vulnerability results.
+
+Result Aggregation
+
+Merge and deduplicate results based on CVE IDs.
+
+Format the results into a structured JSON report.
+
+Result Summarization
+
+Use the OpenAI API (GPT-4o-mini) to generate:
+
+A human-readable summary
+
+A list of detailed technical findings
+
+Remediation suggestions
+
+Output Delivery
+
+Provide output in:
+
+JSON format
+
+(Optionally) Markdown or HTML report format

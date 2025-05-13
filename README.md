@@ -1,40 +1,40 @@
-# Security Agent
+# Security AI Agent
 
-A security scanning and analysis tool for web applications and APIs powered by AI.
+A Security AI Agent for automating vulnerability assessments for websites and smart contracts.
+
+## Features
+
+- **Input Handling**: Accepts website URLs or Solidity smart contract code/repositories
+- **CVE Knowledge Base**: Queries for known CVEs related to the target
+- **Tool Selection**: Dynamically selects appropriate security tools based on the target type
+- **Scan Execution**: Executes selected security tools against the target
+- **Result Aggregation**: Merges and deduplicates results from multiple tools
+- **Summary Generation**: Produces human-readable reports with remediation suggestions
 
 ## Project Structure
 
 This project follows industry best practices with a clean separation of backend and frontend components:
 
-### Backend (`security_agent/`)
+### Backend (`backend/`)
 
 The backend is organized as a Python package with modular components:
 
-- `security_agent/core/` - Core business logic and functionality
-  - `knowledge_base.py` - RAG-based security knowledge base
-  - `orchestrator.py` - Workflow orchestration using LangGraph
+- `backend/core/` - Core business logic and functionality
+  - `security_agent.py` - Main Security Agent module
+  - `input_handler.py` - Input validation and classification
+  - `cve_knowledge_base.py` - CVE querying and analysis
+  - `tool_selector.py` - Security tool selection
+  - `scan_executor.py` - Tool execution (mocked for demo)
+  - `result_aggregator.py` - Result aggregation and deduplication
+  - `result_summarizer.py` - Report generation using LLMs
 
-- `security_agent/data/` - Data handling utilities
-  - `loader.py` - Utilities for loading security data
-  - `sources/` - Source data files (CVEs, best practices, etc.)
-
-- `security_agent/config/` - Configuration management
-  - `settings.py` - Application settings and environment variables
-
-- `security_agent/utils/` - Helper utilities
+- `backend/utils/` - Helper utilities
+  - `cve_loader.py` - CVE data loading utilities
   - `helpers.py` - Common utility functions
 
 ### Frontend (`frontend/`)
 
-A React-based user interface for the security agent:
-
-- Standard Create React App structure
-- Separate from the backend for clean separation of concerns
-
-### Data Storage
-
-- Runtime data (e.g., vector database) is stored in OS-appropriate user data locations
-- Source data is stored within the package structure at `security_agent/data/sources/`
+A React-based user interface for the security agent is planned for future development.
 
 ## Getting Started
 
@@ -44,30 +44,60 @@ A React-based user interface for the security agent:
    ```
 
 2. Set up environment variables:
-   Create a `.env` file in the project root with:
    ```
-   OPENAI_API_KEY=your_api_key_here
-   CVE_API_KEY=your_cve_api_key_here (optional)
+   cp env.example .env
    ```
+   Edit the `.env` file and add your OpenAI API key.
 
 3. Run the security agent:
    ```
-   python main.py --url example.com
+   python main.py scan https://example.com
+   ```
+   or
+   ```
+   python demo.py https://example.com
    ```
 
-## Frontend Development
+## Usage
 
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
+### Command-line Interface
 
-2. Install dependencies:
-   ```
-   npm install
-   ```
+The main entry point provides several commands:
 
-3. Start the development server:
-   ```
-   npm start
-   ```
+```
+# Run a security scan on a website or Solidity contract
+python main.py scan <target> [--format json|markdown] [--output-file results.json]
+
+# Load CVE data into the knowledge base
+python main.py load-cve [--id CVE-ID] [--keyword search_term] [--smart-contracts]
+
+# Run the legacy mode (RAG-based only, less features)
+python main.py run <url> [--sample-data]
+```
+
+### Demo Script
+
+A friendly demo interface is provided for easy usage:
+
+```
+python demo.py <target> [--output results.json] [--format json|markdown]
+```
+
+## Example Output
+
+The security agent produces detailed reports including:
+
+- Overall security risk assessment
+- Detailed vulnerability findings
+- Technical analysis of detected issues
+- Remediation suggestions for each vulnerability
+
+## Note on Tool Execution
+
+In the current demo version, security tool execution is simulated. In a production environment, actual tools like OWASP ZAP, Nikto, Wappalyzer (for websites) and Mythril, Slither (for Solidity contracts) would be integrated.
+
+## Requirements
+
+- Python 3.8+
+- OpenAI API key (GPT-4 or GPT-4o-mini recommended)
+- Python packages listed in requirements.txt

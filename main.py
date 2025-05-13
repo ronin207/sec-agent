@@ -2,6 +2,7 @@ import os
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 import argparse
+import json
 
 # Load environment variables from .env file
 load_dotenv()
@@ -11,7 +12,7 @@ from langchain_core.documents import Document
 
 # Import our components from backend modules
 from backend.core.knowledge_base import SecurityKnowledgeBase
-from backend.core.orchestrator import SecurityAgentOrchestrator
+from backend.core.security_agent import SecurityAgent
 from backend.utils.cve_loader import CVEDataLoader
 
 # Setup basic directory structures
@@ -107,8 +108,15 @@ if __name__ == "__main__":
     # Add subparsers for different operations
     subparsers = parser.add_subparsers(dest="operation", help="Operation to perform")
     
-    # Basic agent run
-    run_parser = subparsers.add_parser("run", help="Run the security agent on a URL")
+    # Scan operation - using the new SecurityAgent
+    scan_parser = subparsers.add_parser("scan", help="Run a security scan on a target")
+    scan_parser.add_argument("target", help="Target to scan (URL or Solidity contract)")
+    scan_parser.add_argument("--format", choices=["json", "markdown"], default="json", 
+                            help="Output format (default: json)")
+    scan_parser.add_argument("--output-file", help="File to save the output to")
+    
+    # Legacy run operation using the old orchestrator
+    run_parser = subparsers.add_parser("run", help="Run the legacy security agent on a URL")
     run_parser.add_argument("url", help="URL to analyze")
     run_parser.add_argument("--sample-data", action="store_true", help="Load sample data")
     
@@ -127,14 +135,59 @@ if __name__ == "__main__":
         print("Warning: OPENAI_API_KEY not found in environment variables.")
         print("Please set your API key in the .env file.")
     
-    # Initialize the knowledge base
-    kb = SecurityKnowledgeBase()
-    
     # Process based on operation
-    if args.operation == "run":
+    if args.operation == "scan":
+        # Use the new SecurityAgent
+        print(f"\n--- Running Security Scan on {args.target} ---")
+        security_agent = SecurityAgent()
+        
+        # Execute the scan
+        results = security_agent.run(args.target, output_format=args.format)
+        
+        # Process scan results
+        if results.get('status') == 'error':
+            print(f"Error: {results.get('error')}")
+        else:
+            # Display summary information
+            print("\n--- Scan Summary ---")
+            print(f"Target: {results.get('input')}")
+            print(f"Input Type: {results.get('input_type')}")
+            print(f"Execution Time: {results.get('execution_time'):.2f} seconds")
+            print(f"Total Findings: {results.get('aggregated_results', {}).get('total_findings', 0)}")
+            
+            # Display severity breakdown
+            print("\nFindings by Severity:")
+            for severity, count in results.get('aggregated_results', {}).get('findings_by_severity', {}).items():
+                print(f"- {severity}: {count}")
+            
+            # Display summary
+            print("\nSummary:")
+            summary = results.get('summary', {})
+            print(summary.get('summary', "No summary available"))
+            
+            # Display top findings
+            print("\nTop Technical Findings:")
+            for i, finding in enumerate(summary.get('technical_findings', [])[:5], 1):
+                print(f"{i}. {finding}")
+            
+            # Save output to file if requested
+            if args.output_file:
+                with open(args.output_file, 'w') as f:
+                    f.write(results.get('formatted_output', json.dumps(results)))
+                print(f"\nFull results saved to {args.output_file}")
+            else:
+                print("\nRun with --output-file to save full results to a file")
+    
+    elif args.operation == "run":
+        # Initialize the knowledge base (legacy mode)
+        kb = SecurityKnowledgeBase()
+        
         # Load sample data if requested
         if args.sample_data:
             populate_sample_data(kb)
+        
+        # Import orchestrator only when needed (legacy mode)
+        from backend.core.orchestrator import SecurityAgentOrchestrator
         
         # Create the agent orchestrator
         orchestrator = SecurityAgentOrchestrator(kb)
@@ -162,6 +215,9 @@ if __name__ == "__main__":
                 print(f"  Description: {vuln['description']}")
     
     elif args.operation == "load-cve":
+        # Initialize the knowledge base
+        kb = SecurityKnowledgeBase()
+        
         # Load CVE data based on provided arguments
         load_cve_data(
             kb,
@@ -172,7 +228,7 @@ if __name__ == "__main__":
         )
         
         print("\nCVE data loaded into knowledge base successfully.")
-        print("You can now run the agent with: python main.py run <url>")
+        print("You can now run the agent with: python main.py scan <target>")
     
     else:
         # No operation specified, show help
