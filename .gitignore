@@ -77,6 +77,8 @@ chroma/
 
 # Output files
 *.json
+!package.json
+!package-lock.json
 *.md
 !README.md
 
@@ -84,3 +86,6 @@ chroma/
 results/
 scans/
 output/
+
+# Cursor rules file - keep local only
+settings.cursorrules
