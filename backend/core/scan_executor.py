@@ -65,6 +65,23 @@ class ScanExecutor:
                 # For demo purposes, we'll simulate tool execution
                 tool_result = self._simulate_tool_execution(tool, input_type, input_value)
                 
+                # Log detailed tool execution results
+                logger.debug(f"Tool execution details for {tool.get('name')}:")
+                logger.debug(f"Command executed: {tool.get('command').format(target=input_value)}")
+                logger.debug(f"Execution time: {tool_result.get('execution_time'):.2f} seconds")
+                logger.debug(f"Status: {tool_result.get('status')}")
+                logger.debug(f"Number of findings: {len(tool_result.get('findings', []))}")
+                logger.debug(f"Raw output sample: {tool_result.get('raw_output')[:200]}...")
+                
+                # Log each finding in detail
+                for i, finding in enumerate(tool_result.get('findings', []), 1):
+                    logger.debug(f"Finding {i} from {tool.get('name')}:")
+                    logger.debug(f"  ID: {finding.get('id')}")
+                    logger.debug(f"  Name: {finding.get('name')}")
+                    logger.debug(f"  Severity: {finding.get('severity')}")
+                    logger.debug(f"  Description: {finding.get('description')}")
+                    logger.debug(f"  Location: {finding.get('location')}")
+                
                 scan_results['tool_results'].append({
                     "tool_id": tool.get('id'),
                     "tool_name": tool.get('name'),

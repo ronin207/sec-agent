@@ -8,15 +8,27 @@ import os
 import sys
 import json
 import argparse
+import logging
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.table import Table
 from rich import box
+from rich.logging import RichHandler
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Configure rich logging
+logging.basicConfig(
+    level=logging.getLevelName(os.environ.get("LOG_LEVEL", "INFO")),
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)]
+)
+
+log = logging.getLogger("rich")
 
 # Import the security agent
 from backend.core.security_agent import SecurityAgent
@@ -47,6 +59,59 @@ def check_api_key():
         console.print("Example: export OPENAI_API_KEY=your_api_key_here")
         return False
     return True
+
+def display_tool_results(tool_results):
+    """Display detailed tool execution results"""
+    console.print("\n[bold blue]Detailed Tool Execution Results[/bold blue]")
+    
+    for tool_result in tool_results:
+        tool_name = tool_result.get('tool_name', 'Unknown')
+        status = tool_result.get('status', 'Unknown')
+        
+        # Determine status color
+        status_color = "green" if status == "success" else "red"
+        
+        console.print(f"\n[bold]Tool:[/bold] {tool_name}")
+        console.print(f"[bold]Status:[/bold] [{status_color}]{status}[/{status_color}]")
+        console.print(f"[bold]Command:[/bold] {tool_result.get('command_executed', 'N/A')}")
+        console.print(f"[bold]Execution Time:[/bold] {tool_result.get('execution_time', 0):.2f} seconds")
+        
+        # Display findings
+        findings = tool_result.get('findings', [])
+        if findings:
+            console.print(f"\n[bold]Findings ({len(findings)}):[/bold]")
+            
+            findings_table = Table(box=box.SIMPLE)
+            findings_table.add_column("ID", style="cyan")
+            findings_table.add_column("Name", style="blue")
+            findings_table.add_column("Severity", style="magenta")
+            findings_table.add_column("Location", style="green")
+            
+            for finding in findings:
+                severity = finding.get('severity', 'Unknown')
+                severity_color = "green"
+                if severity.lower() == "high":
+                    severity_color = "orange3"
+                elif severity.lower() == "critical":
+                    severity_color = "red"
+                elif severity.lower() == "medium":
+                    severity_color = "yellow"
+                
+                findings_table.add_row(
+                    finding.get('id', 'Unknown'),
+                    finding.get('name', 'Unknown'),
+                    f"[{severity_color}]{severity}[/{severity_color}]",
+                    finding.get('location', 'Unknown')
+                )
+            
+            console.print(findings_table)
+            
+        # Display raw output sample
+        raw_output = tool_result.get('raw_output', '')
+        if raw_output:
+            console.print("\n[bold]Raw Output Sample:[/bold]")
+            console.print(Panel(raw_output[:500] + "..." if len(raw_output) > 500 else raw_output,
+                               width=100, expand=False))
 
 def display_results(results):
     """Display scan results in a nice format"""
@@ -123,6 +188,10 @@ def display_results(results):
     for tool in results.get('aggregated_results', {}).get('tools_used', []):
         console.print(f"- {tool}")
     
+    # Display detailed tool results if available
+    if results.get('scan_results', {}).get('tool_results', []):
+        display_tool_results(results.get('scan_results', {}).get('tool_results', []))
+    
     console.print("\n[bold]Note:[/bold] This is a demo with simulated scan results.")
 
 def main():
@@ -132,6 +201,7 @@ def main():
     parser.add_argument("--output", "-o", help="Output file for full results")
     parser.add_argument("--format", "-f", choices=["json", "markdown"], default="json",
                        help="Output format (default: json)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show verbose output including tool details")
     
     args = parser.parse_args()
     
@@ -145,6 +215,11 @@ def main():
         console.print("Example: python demo.py https://example.com")
         console.print("Example: python demo.py path/to/contract.sol")
         return 1
+    
+    # Set logging level based on verbose flag
+    if args.verbose:
+        log.setLevel(logging.DEBUG)
+        console.print("[bold green]Verbose mode enabled. Showing detailed logs.[/bold green]\n")
     
     with console.status("[bold green]Initializing Security Agent...[/bold green]"):
         security_agent = SecurityAgent()
