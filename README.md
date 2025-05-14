@@ -40,68 +40,84 @@ A React-based user interface for the security agent is planned for future develo
 ## Architecture Diagram
 
 ```mermaid
-graph TD
+flowchart TD
     %% Entry Points
-    User((User)) --> |Input Target| Demo[demo.py]
-    User --> |Commands| Main[main.py]
+    User((User)) --> Demo[demo.py]
+    User --> Main[main.py]
     
     %% Main Components
     Main --> SecurityAgent
     Demo --> SecurityAgent
     
     %% Core modules
-    subgraph Backend Core
-        SecurityAgent[SecurityAgent] --> InputHandler[InputHandler]
-        SecurityAgent --> CVEKnowledgeBase[CVEKnowledgeBase]
-        SecurityAgent --> ToolSelector[ToolSelector]
-        SecurityAgent --> ScanExecutor[ScanExecutor]
-        SecurityAgent --> ResultAggregator[ResultAggregator]
-        SecurityAgent --> ResultSummarizer[ResultSummarizer]
-        
-        %% Data flow
-        InputHandler --> |Validated Input| CVEKnowledgeBase
-        CVEKnowledgeBase --> |CVE Information| ToolSelector
-        ToolSelector --> |Selected Tools| ScanExecutor
-        ScanExecutor --> |Scan Results| ResultAggregator
-        ResultAggregator --> |Aggregated Results| ResultSummarizer
+    subgraph BackendCore[Backend Core]
+        SecurityAgent[SecurityAgent]
+        InputHandler[InputHandler]
+        CVEKnowledgeBase[CVEKnowledgeBase]
+        ToolSelector[ToolSelector]
+        ScanExecutor[ScanExecutor]
+        ResultAggregator[ResultAggregator]
+        ResultSummarizer[ResultSummarizer]
     end
     
+    %% Connections between core components
+    SecurityAgent --> InputHandler
+    SecurityAgent --> CVEKnowledgeBase
+    SecurityAgent --> ToolSelector
+    SecurityAgent --> ScanExecutor
+    SecurityAgent --> ResultAggregator
+    SecurityAgent --> ResultSummarizer
+    
+    %% Data flow
+    InputHandler --> CVEKnowledgeBase
+    CVEKnowledgeBase --> ToolSelector
+    ToolSelector --> ScanExecutor
+    ScanExecutor --> ResultAggregator
+    ResultAggregator --> ResultSummarizer
+    
     %% Utilities
-    subgraph Backend Utils
+    subgraph BackendUtils[Backend Utils]
         CVELoader[CVE Loader]
         Helpers[Helper Utilities]
     end
     
     %% External Services
-    OpenAI[OpenAI API] -.-> CVEKnowledgeBase
+    OpenAI[OpenAI API]
+    OpenAI -.-> CVEKnowledgeBase
     OpenAI -.-> ResultSummarizer
     
     %% Tool execution - simulated in demo
-    subgraph Security Tools
-        subgraph Web Tools
-            ZAP[OWASP ZAP]
-            Nikto[Nikto]
-            Wappalyzer[Wappalyzer]
-            Nuclei[Nuclei]
-        end
-        subgraph Smart Contract Tools
-            Slither[Slither]
-            Mythril[Mythril]
-            Solhint[Solhint]
-        end
+    subgraph WebTools[Web Tools]
+        ZAP[OWASP ZAP]
+        Nikto[Nikto]
+        Wappalyzer[Wappalyzer]
+        Nuclei[Nuclei]
     end
     
-    ScanExecutor --> Security Tools
+    subgraph SmartContractTools[Smart Contract Tools]
+        Slither[Slither]
+        Mythril[Mythril]
+        Solhint[Solhint]
+    end
+    
+    %% Connect executor to individual tools
+    ScanExecutor --> ZAP
+    ScanExecutor --> Nikto
+    ScanExecutor --> Wappalyzer
+    ScanExecutor --> Nuclei
+    ScanExecutor --> Slither
+    ScanExecutor --> Mythril
+    ScanExecutor --> Solhint
     
     %% Connection to utilities
     CVEKnowledgeBase --> CVELoader
-    Backend Core --> Helpers
+    BackendCore --> Helpers
     
     %% Result flow
-    ResultSummarizer --> |Final Report| User
+    ResultSummarizer --> User
     
     %% Output formats
-    ResultSummarizer --> |JSON/Markdown| OutputFile[(Output File)]
+    ResultSummarizer --> OutputFile[(Output File)]
     
     %% Styling
     classDef core fill:#f9f,stroke:#333,stroke-width:2px;
