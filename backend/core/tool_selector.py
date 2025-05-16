@@ -2,7 +2,7 @@
 Security Tool Selector module for the Security Agent.
 Selects appropriate security tools based on input type and CVE information.
 """
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import logging
 
 # Import helpers
@@ -73,18 +73,23 @@ class SecurityToolSelector:
             }
         }
     
-    def select_tools(self, input_type: str, cve_info: Dict) -> Dict:
+    def select_tools(self, input_type: str, cve_info: Union[Dict, str, Any]) -> List:
         """
         Select appropriate security tools based on input type and CVE information.
         
         Args:
             input_type: Type of input ('website' or 'solidity_contract')
-            cve_info: CVE information and risk assessment
+            cve_info: CVE information and risk assessment, could be a dict or string
             
         Returns:
-            Dictionary containing selected tools and their configuration
+            List containing selected tools and their configuration
         """
         logger.info(f"Selecting security tools for input type: {input_type}")
+        
+        # Ensure cve_info is a dictionary to prevent 'str' has no attribute 'get' errors
+        if not isinstance(cve_info, dict):
+            logger.warning(f"Expected dict for cve_info but got {type(cve_info)}. Converting to empty dict.")
+            cve_info = {}
         
         if input_type == 'website':
             return self._select_website_tools(cve_info)
@@ -92,9 +97,9 @@ class SecurityToolSelector:
             return self._select_solidity_tools(cve_info)
         else:
             logger.warning(f"Unknown input type: {input_type}")
-            return {"selected_tools": [], "error": f"Unknown input type: {input_type}"}
+            return []
     
-    def _select_website_tools(self, cve_info: Dict) -> Dict:
+    def _select_website_tools(self, cve_info: Dict) -> List:
         """Select tools for website security scanning"""
         selected_tools = []
         
@@ -146,12 +151,9 @@ class SecurityToolSelector:
                 "reason": "Specialized vulnerability detection for high-risk issues"
             })
         
-        return {
-            "selected_tools": selected_tools,
-            "input_type": "website"
-        }
+        return selected_tools
     
-    def _select_solidity_tools(self, cve_info: Dict) -> Dict:
+    def _select_solidity_tools(self, cve_info: Dict) -> List:
         """Select tools for Solidity contract security scanning"""
         selected_tools = []
         
@@ -190,7 +192,4 @@ class SecurityToolSelector:
                 "reason": "In-depth symbolic execution for critical vulnerabilities"
             })
         
-        return {
-            "selected_tools": selected_tools,
-            "input_type": "solidity_contract"
-        } 
+        return selected_tools 

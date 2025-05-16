@@ -2,7 +2,7 @@
 Result Summarizer module for the Security Agent.
 Generates human-readable summaries of security scan results using OpenAI API.
 """
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import os
 import json
 
@@ -41,7 +41,7 @@ class ResultSummarizer:
         self.model_name = model_name
         self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
     
-    def generate_summary(self, aggregated_results: Dict) -> Dict:
+    def generate_summary(self, aggregated_results: Union[Dict, str, Any]) -> Dict:
         """
         Generate a human-readable summary of the security scan results.
         
@@ -51,6 +51,12 @@ class ResultSummarizer:
         Returns:
             Dictionary containing the generated summary
         """
+        # Ensure aggregated_results is a dictionary to prevent attribute errors
+        if not isinstance(aggregated_results, dict):
+            logger.warning(f"Expected dict for aggregated_results but got {type(aggregated_results)}. Converting to empty dict.")
+            aggregated_results = {}
+            return self._get_fallback_summary(aggregated_results)
+            
         logger.info(f"Generating summary for scan {aggregated_results.get('scan_id')}")
         
         # Extract key information for the summary
