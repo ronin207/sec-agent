@@ -818,6 +818,70 @@ body {
   color: #666;
 }
 
+.code-suggestion {
+  margin: 0.75rem 0 1.5rem;
+}
+
+.code-suggestion h6 {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.code-block {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.code-block code {
+  display: block;
+}
+
+/* Syntax highlighting colors */
+.code-block .comment, .code-block .comment-content {
+  color: #6A9955;
+}
+
+.code-block .keyword {
+  color: #569CD6;
+}
+
+.code-block .function {
+  color: #DCDCAA;
+}
+
+.code-block .variable {
+  color: #9CDCFE;
+}
+
+.code-block .string {
+  color: #CE9178;
+}
+
+.code-block .number {
+  color: #B5CEA8;
+}
+
+/* Dark mode for code blocks */
+@media (prefers-color-scheme: dark) {
+  .code-block {
+    background-color: #1E1E1E;
+    border-color: #333;
+    color: #D4D4D4;
+  }
+}
+
 .response-structure {
   margin-top: 1rem;
   padding: 1rem;

@@ -487,10 +487,19 @@ function App() {
                       results.summary.technical_findings.forEach(finding => {
                         // Extract base text from different formats
                         let text = '';
+                        let suggestion = '';
+                        
                         if (typeof finding === 'string') {
                           text = finding;
+                          // Try to extract suggestion if in format "vulnerability: description => suggestion"
+                          const suggestionMatch = text.match(/=>(.+)$/);
+                          if (suggestionMatch) {
+                            suggestion = suggestionMatch[1].trim();
+                            text = text.replace(/=>(.+)$/, '').trim();
+                          }
                         } else if (typeof finding === 'object') {
                           text = finding.name || finding.description || JSON.stringify(finding);
+                          suggestion = finding.recommendation || finding.remediation || finding.suggestion || '';
                         }
                         
                         // Extract vulnerability type using various patterns
@@ -545,11 +554,17 @@ function App() {
                           }
                         }
                         
+                        // Generate a code suggestion based on vulnerability type if not already provided
+                        if (!suggestion) {
+                          suggestion = getDefaultSuggestion(vulnType);
+                        }
+                        
                         // Create or add to grouped findings
                         if (!groupedFindings[vulnType]) {
                           groupedFindings[vulnType] = {
                             description: text,
-                            locations: []
+                            locations: [],
+                            suggestion: suggestion
                           };
                         }
                         
@@ -558,18 +573,135 @@ function App() {
                         }
                       });
                       
+                      // Helper function to get default code suggestions based on vulnerability type
+                      function getDefaultSuggestion(vulnType) {
+                        const lowerType = vulnType.toLowerCase();
+                        
+                        if (lowerType.includes('reentrancy')) {
+                          return `// Vulnerable code
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    (bool success, ) = msg.sender.call{value: amount}("");
+    require(success);
+    balances[msg.sender] -= amount;
+}
+
+// Suggested fix
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    balances[msg.sender] -= amount; // Update state before external call
+    (bool success, ) = msg.sender.call{value: amount}("");
+    require(success);
+}`;
+                        } 
+                        else if (lowerType.includes('integer overflow') || lowerType.includes('underflow')) {
+                          return `// Vulnerable code
+function add(uint256 a, uint256 b) public pure returns (uint256) {
+    return a + b; // Can overflow
+}
+
+// Suggested fix
+function add(uint256 a, uint256 b) public pure returns (uint256) {
+    uint256 c = a + b;
+    require(c >= a, "Addition overflow");
+    return c;
+}
+
+// Or use SafeMath library (Solidity < 0.8.0)
+using SafeMath for uint256;
+function add(uint256 a, uint256 b) public pure returns (uint256) {
+    return a.add(b);
+}
+
+// Or use built-in overflow checks (Solidity >= 0.8.0)`;
+                        }
+                        else if (lowerType.includes('unchecked') && (lowerType.includes('send') || lowerType.includes('call'))) {
+                          return `// Vulnerable code
+function sendFunds(address payable recipient, uint256 amount) public {
+    recipient.send(amount); // Return value not checked
+}
+
+// Suggested fix
+function sendFunds(address payable recipient, uint256 amount) public {
+    bool success = recipient.send(amount);
+    require(success, "Transfer failed");
+}
+
+// Or use transfer() which automatically reverts on failure
+function sendFunds(address payable recipient, uint256 amount) public {
+    recipient.transfer(amount);
+}`;
+                        }
+                        else if (lowerType.includes('dos')) {
+                          return `// Vulnerable code
+function distribute(address[] memory recipients) public {
+    for(uint i = 0; i < recipients.length; i++) {
+        recipients[i].transfer(1 ether); // Will revert entire tx if one transfer fails
+    }
+}
+
+// Suggested fix
+function distribute(address[] memory recipients) public {
+    for(uint i = 0; i < recipients.length; i++) {
+        (bool success, ) = recipients[i].call{value: 1 ether}("");
+        // Log failure but continue execution
+        if (!success) {
+            emit TransferFailed(recipients[i]);
+        }
+    }
+}`;
+                        }
+                        else if (lowerType.includes('visibility')) {
+                          return `// Vulnerable code
+function initializeContract(address _owner) {
+    owner = _owner; // Missing visibility modifier (public by default)
+}
+
+// Suggested fix
+function initializeContract(address _owner) private {
+    owner = _owner;
+}
+
+// Or
+function initializeContract(address _owner) internal {
+    owner = _owner;
+}`;
+                        }
+                        else if (lowerType.includes('compiler')) {
+                          return `// Update your pragma statement
+// From
+pragma solidity ^0.4.25;
+
+// To a more recent version
+pragma solidity ^0.8.20;
+
+// Then adjust your code to be compatible with the newer compiler version`;
+                        }
+                        
+                        // Default suggestion if no specific pattern matched
+                        return "// Review the vulnerable code and implement security best practices";
+                      }
+                      
                       // Render grouped findings
                       return (
                         <ul>
                           {Object.entries(groupedFindings).map(([type, data], idx) => (
                             <li key={idx}>
                               <strong>{type}</strong>
-                              {data.locations.length > 0 ? (
+                              {data.locations.length > 0 && (
                                 <ul className="finding-locations">
                                   <li>Lines: {data.locations.join(', ')}</li>
                                 </ul>
-                              ) : (
-                                <p className="finding-description">{data.description}</p>
+                              )}
+                              <p className="finding-description">{data.description}</p>
+                              
+                              {data.suggestion && (
+                                <div className="code-suggestion">
+                                  <h6>Code Suggestion</h6>
+                                  <pre className="code-block">
+                                    <code>{data.suggestion}</code>
+                                  </pre>
+                                </div>
                               )}
                             </li>
                           ))}
