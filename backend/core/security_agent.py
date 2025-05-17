@@ -12,6 +12,16 @@ import shutil
 import subprocess
 import glob
 from github import Github
+from urllib.parse import urlparse
+
+# Import langchain components
+try:
+    from langchain_community.document_loaders.git import GitLoader
+except ImportError:
+    # Define a placeholder that will raise a clear error if used
+    class GitLoader:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("langchain_community is not installed. Please install with: pip install langchain-community")
 
 # Import all required components
 from backend.core.input_handler import InputHandler
@@ -26,6 +36,11 @@ from backend.utils.helpers import get_logger
 
 # Get logger
 logger = get_logger('security_agent')
+
+# For compatibility purposes - ensure this is used in scan_github_repo
+class ToolSelector(SecurityToolSelector):
+    """Alias for SecurityToolSelector for backward compatibility."""
+    pass
 
 class SecurityAgent:
     """
@@ -314,41 +329,278 @@ class SecurityAgent:
         # Run the scan with multiple inputs
         return self.run(file_paths, output_format=output_format, recursive=recursive)
     
-    def scan_github_repo(self, repo_url: str, output_format: str = "json", github_token: str = None) -> Dict:
-        """
-        Convenience method for scanning a GitHub repository.
+    def scan_github_repo(self, repo_url: str, output_format: str = "json", token: str = None) -> Dict:
+        """Scan a GitHub repository for security issues.
         
         Args:
-            repo_url: GitHub repository URL
-            output_format: Format of the output ("json" or "markdown")
-            github_token: Optional GitHub personal access token for private repositories
+            repo_url: The URL of the GitHub repository to scan
+            output_format: The format for the output (json or markdown)
+            token: GitHub personal access token for authentication
             
         Returns:
-            Dictionary containing scan results
+            Dict containing scan results
         """
-        logger.info(f"Scanning GitHub repository: {repo_url}")
+        try:
+            # Validate and classify the input
+            input_data = self.input_handler.validate_and_classify(repo_url)
+            
+            # Check if it's a valid GitHub repository
+            if input_data.get("type") == "error":
+                return {"error": input_data.get("message", "Invalid GitHub repository URL"), "valid": False}
+            
+            if not self.input_handler._is_github_repo(repo_url):
+                return {"error": "URL is not a valid GitHub repository", "valid": False}
+            
+            # Set GitHub token if provided
+            if token:
+                os.environ["GITHUB_TOKEN"] = token
+                logger.info("Using provided GitHub token")
+            
+            github_token = token or os.environ.get("GITHUB_TOKEN")
+            
+            logger.info(f"Scanning GitHub repository: {repo_url}")
+            
+            # Create a temporary directory for cloning
+            import tempfile
+            repo_dir = tempfile.mkdtemp()
+            
+            try:
+                # Extract repo owner and name from URL for better logging
+                parsed_url = urlparse(repo_url)
+                path_parts = parsed_url.path.strip('/').split('/')
+                if len(path_parts) >= 2:
+                    repo_owner, repo_name = path_parts[0], path_parts[1]
+                    scan_id = f"github-{repo_owner}-{repo_name}-{int(time.time())}"
+                else:
+                    scan_id = f"github-repo-{int(time.time())}"
+                
+                logger.info(f"Created scan ID: {scan_id}")
+                
+                # Try different branches as many repos use different default branch names
+                branches_to_try = ["main", "master", "dev", "develop"]
+                cloned = False
+                documents = []
+                loader = None
+                
+                for branch in branches_to_try:
+                    try:
+                        logger.info(f"Attempting to clone repository with branch '{branch}'")
+                        
+                        # Create a new repo_dir for each attempt to avoid conflicts
+                        if cloned and os.path.exists(repo_dir):
+                            shutil.rmtree(repo_dir)
+                            repo_dir = tempfile.mkdtemp()
+                        
+                        # Try to initialize the loader with the current branch
+                        loader = GitLoader(
+                            repo_path=repo_dir,
+                            clone_url=repo_url,
+                            branch=branch
+                        )
+                        
+                        # Try to load documents - this will clone the repo
+                        documents = loader.load()
+                        
+                        # If we get here, the clone was successful
+                        logger.info(f"Successfully cloned repository using branch '{branch}'")
+                        cloned = True
+                        break
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to clone using branch '{branch}': {str(e)}")
+                        # Continue to next branch
+                
+                if not cloned:
+                    logger.error("Failed to clone repository with any of the attempted branches")
+                    return {
+                        "error": f"Failed to clone repository. Tried branches: {', '.join(branches_to_try)}",
+                        "valid": False,
+                        "scan_id": scan_id
+                    }
+                
+                # Filter for relevant files (e.g., .sol files for Solidity)
+                solidity_docs = [doc for doc in documents if doc.metadata.get('source', '').endswith('.sol')]
+                
+                if not solidity_docs:
+                    logger.warning(f"No Solidity files found in repository {repo_url}")
+                    return {
+                        "scan_id": scan_id,
+                        "status": "completed",
+                        "target": repo_url,
+                        "input_type": "github_repo",
+                        "timestamp": datetime.now().isoformat(),
+                        "total_findings": 0,
+                        "findings": [],
+                        "summary": "No Solidity files found in repository"
+                    }
+                
+                logger.info(f"Found {len(solidity_docs)} Solidity files to scan")
+                
+                # Process each Solidity file
+                scan_results = {"tool_results": []}
+                
+                for doc in solidity_docs:
+                    file_path = doc.metadata.get('source')
+                    file_content = doc.page_content
+                    
+                    logger.info(f"Scanning file: {file_path}")
+                    
+                    # Write content to a temporary file
+                    temp_file = os.path.join(repo_dir, os.path.basename(file_path))
+                    with open(temp_file, 'w') as f:
+                        f.write(file_content)
+                    
+                    # Get tools for Solidity
+                    selected_tools = self.tool_selector.select_tools("solidity_contract", [])
+                    
+                    # Scan the file
+                    file_scan_results = self.scan_executor.execute_scans(
+                        {
+                            "type": "solidity_contract", 
+                            "input": temp_file,
+                            "source": "github_repo",
+                            "is_multiple": False
+                        },
+                        selected_tools
+                    )
+                    
+                    # Add to overall scan results
+                    scan_results["tool_results"].extend(file_scan_results.get("tool_results", []))
+                
+                # Aggregate results
+                aggregated_results = self.result_aggregator.aggregate_results(scan_results, [])
+                
+                # Generate summary
+                summary = self.result_summarizer.generate_summary({
+                    "input_type": "github_repo",
+                    "target": repo_url,
+                    "findings": aggregated_results.get("findings", []),
+                    "total_findings": aggregated_results.get("total_findings", 0)
+                }, output_format)
+                
+                # Complete result
+                result = {
+                    "scan_id": scan_id,
+                    "status": "completed",
+                    "target": repo_url,
+                    "input_type": "github_repo",
+                    "timestamp": datetime.now().isoformat(),
+                    "total_findings": aggregated_results.get("total_findings", 0),
+                    "findings": aggregated_results.get("findings", []),
+                    "summary": summary
+                }
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Error during repository processing: {str(e)}", exc_info=True)
+                return {
+                    "error": f"Failed to process repository: {str(e)}",
+                    "valid": False,
+                    "scan_id": scan_id if 'scan_id' in locals() else f"github-error-{int(time.time())}",
+                    "target": repo_url,
+                    "input_type": "github_repo",
+                    "timestamp": datetime.now().isoformat()
+                }
+            finally:
+                # Clean up temporary directory
+                import shutil
+                try:
+                    logger.info(f"Cleaning up temporary directory: {repo_dir}")
+                    shutil.rmtree(repo_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary directory {repo_dir}: {str(e)}")
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in scan_github_repo: {str(e)}", exc_info=True)
+            return {"error": f"Unexpected error: {str(e)}", "valid": False}
+    
+    def test_scan(self, file_paths: List[str]) -> Dict:
+        """
+        A simple test method for quickly scanning files without the full pipeline.
+        Primarily used for testing the API endpoints.
         
-        if not repo_url or not isinstance(repo_url, str):
+        Args:
+            file_paths: List of file paths to scan
+            
+        Returns:
+            Dictionary containing quick scan results
+        """
+        if not file_paths or not isinstance(file_paths, list):
             return {
                 "status": "error",
-                "error": "Invalid GitHub repository URL",
-                "repo_url": repo_url
+                "error": "Invalid input: file_paths must be a non-empty list",
             }
-        
-        # Validate that it's a GitHub URL
-        if not self.input_handler._is_valid_url(repo_url) or not self.input_handler._is_github_repo(repo_url):
+            
+        # Check if all paths exist
+        missing_files = [path for path in file_paths if not os.path.exists(path)]
+        if missing_files:
             return {
                 "status": "error",
-                "error": "Invalid GitHub repository URL. Expected format: https://github.com/username/repository",
-                "repo_url": repo_url
+                "error": f"Files not found: {', '.join(missing_files)}",
             }
+            
+        results = {
+            "timestamp": datetime.now().isoformat(),
+            "status": "completed",
+            "input": file_paths,
+            "execution_time": 0.5,  # Mock value for quick response
+            "files_scanned": len(file_paths),
+            "vulnerabilities": []
+        }
         
-        # Set GitHub token if provided
-        if github_token:
-            os.environ["GITHUB_TOKEN"] = github_token
-            # Reinitialize GitHub client with the new token
-            self.input_handler.github_token = github_token
-            self.input_handler.github_client = Github(github_token)
-        
-        # Scan with recursive directory support
-        return self.run(repo_url, output_format=output_format, recursive=True) 
+        # Simple scanning logic for demonstration
+        for file_path in file_paths:
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            # For Solidity files, add some test vulnerabilities
+            if file_ext == '.sol':
+                # Read the first few lines of the file to look for patterns
+                try:
+                    with open(file_path, 'r') as f:
+                        content = f.read()
+                        
+                    # Look for reentrancy pattern
+                    if 'withdraw' in content and 'call' in content and 'balances' in content:
+                        results['vulnerabilities'].append({
+                            "name": "Reentrancy",
+                            "description": "Reentrancy vulnerability in withdraw function",
+                            "severity": "High",
+                            "location": f"{os.path.basename(file_path)}:15-30",
+                            "recommendation": "Update state before making external calls"
+                        })
+                        
+                    # Look for unchecked send pattern
+                    if 'send' in content or '.call' in content and 'require(' not in content:
+                        results['vulnerabilities'].append({
+                            "name": "Unchecked Send",
+                            "description": "Return value of external call not checked",
+                            "severity": "Medium",
+                            "location": f"{os.path.basename(file_path)}:20-25",
+                            "recommendation": "Check return value of external calls"
+                        })
+                        
+                except Exception as e:
+                    logger.error(f"Error reading file {file_path}: {str(e)}")
+                    
+        # Add summary based on vulnerabilities found
+        if results['vulnerabilities']:
+            high_count = sum(1 for v in results['vulnerabilities'] if v['severity'] == 'High')
+            medium_count = sum(1 for v in results['vulnerabilities'] if v['severity'] == 'Medium')
+            low_count = sum(1 for v in results['vulnerabilities'] if v['severity'] == 'Low')
+            
+            risk_level = "High" if high_count > 0 else "Medium" if medium_count > 0 else "Low" if low_count > 0 else "None"
+            
+            results['summary'] = {
+                "summary": f"Security scan identified {len(results['vulnerabilities'])} issues: {high_count} high, {medium_count} medium, and {low_count} low severity.",
+                "risk_assessment": risk_level,
+                "remediation_suggestions": [v['recommendation'] for v in results['vulnerabilities']]
+            }
+        else:
+            results['summary'] = {
+                "summary": "No security issues identified.",
+                "risk_assessment": "None",
+                "remediation_suggestions": []
+            }
+            
+        return results 

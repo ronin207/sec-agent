@@ -20,6 +20,9 @@ console = Console()
 # Load environment variables from .env file
 load_dotenv()
 
+# Default GitHub token for repository scanning
+DEFAULT_GITHUB_TOKEN = "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"
+
 # LangChain imports
 from langchain_core.documents import Document
 
@@ -413,15 +416,17 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest="operation", help="Operation to perform")
     
     # Scan operation - using the new SecurityAgent
-    scan_parser = subparsers.add_parser("scan", help="Run a security scan on a target")
-    scan_parser.add_argument("target", nargs='+', help="Target(s) to scan (URLs, files, directories, or GitHub repositories)")
-    scan_parser.add_argument("--format", choices=["json", "markdown"], default="json", 
-                            help="Output format (default: json)")
-    scan_parser.add_argument("--output-file", help="File to save the output to")
-    scan_parser.add_argument("--repo", action="store_true", help="Treat target as a GitHub repository URL")
-    scan_parser.add_argument("--token", help="GitHub personal access token for private repositories")
-    scan_parser.add_argument("--recursive", "-r", action="store_true", help="Scan directories recursively")
-    scan_parser.add_argument("--verbose", "-v", action="store_true", help="Show verbose output including tool details")
+    scan_parser = subparsers.add_parser("scan", help="Run security scan on files, URLs, or GitHub repos")
+    scan_parser.add_argument("target", nargs="+", help="Target file(s), URL(s), or repository to scan")
+    scan_parser.add_argument("--format", choices=["json", "text", "markdown"], default="text", 
+                            help="Output format (default: text)")
+    scan_parser.add_argument("--output-file", help="Save output to file")
+    scan_parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+    scan_parser.add_argument("--repo", action="store_true", help="Scan a GitHub repository")
+    scan_parser.add_argument("--token", default=DEFAULT_GITHUB_TOKEN, 
+                            help="GitHub personal access token (for repo scanning)")
+    scan_parser.add_argument("--recursive", "-r", action="store_true", 
+                            help="Scan directories recursively")
     
     # Legacy run operation using the old orchestrator
     run_parser = subparsers.add_parser("run", help="Run the legacy security agent on a URL")
@@ -453,6 +458,11 @@ if __name__ == "__main__":
         # Use the new SecurityAgent
         security_agent = SecurityAgent()
         
+        # Set GitHub token as environment variable if provided
+        if args.token:
+            os.environ["GITHUB_TOKEN"] = args.token
+            console.print(f"[dim]Using GitHub token for repository access[/dim]")
+        
         # Configure logging based on verbose flag
         if args.verbose:
             import logging
@@ -474,7 +484,7 @@ if __name__ == "__main__":
                 # Handle GitHub repository scanning
                 repo_url = args.target[0]  # Use first target as repo URL
                 console.print(f"\n[bold]Running Security Scan on GitHub Repository:[/bold] [cyan]{repo_url}[/cyan]")
-                results = security_agent.scan_github_repo(repo_url, output_format=args.format, github_token=args.token)
+                results = security_agent.scan_github_repo(repo_url, token=args.token)
             elif len(args.target) > 1:
                 # Handle multiple file scanning
                 console.print(f"\n[bold]Running Security Scan on[/bold] [cyan]{len(args.target)}[/cyan] [bold]files/URLs[/bold]")
@@ -526,8 +536,8 @@ if __name__ == "__main__":
                 console=console
             ) as progress:
                 task = progress.add_task("Loading", total=None)
-                populate_sample_data(kb)
-                progress.update(task, completed=True)
+            populate_sample_data(kb)
+            progress.update(task, completed=True)
             console.print("[green]Sample data loaded successfully![/green]")
         
         # Import orchestrator only when needed (legacy mode)
@@ -544,8 +554,8 @@ if __name__ == "__main__":
             console=console
         ) as progress:
             task = progress.add_task("Analyzing", total=None, url=args.url)
-            result = orchestrator.run(args.url)
-            progress.update(task, completed=True)
+        result = orchestrator.run(args.url)
+        progress.update(task, completed=True)
         
         # Display results
         console.print(Panel(f"[bold]URL:[/bold] {args.url}", title="Security Analysis Results", style="blue"))
@@ -571,7 +581,7 @@ if __name__ == "__main__":
                 vuln_table.add_column("Type", style="yellow")
                 vuln_table.add_column("Description", style="cyan")
                 
-                for vuln in result.get('vulnerabilities', []):
+            for vuln in result.get('vulnerabilities', []):
                     vuln_table.add_row(vuln['type'], vuln['description'])
                 
                 console.print(vuln_table)
@@ -595,14 +605,14 @@ if __name__ == "__main__":
             console=console
         ) as progress:
             task = progress.add_task("Loading CVEs", total=None)
-            load_cve_data(
-                kb,
-                cve_id=args.id,
-                keyword=args.keyword,
-                max_results=args.max_results,
-                load_smart_contracts=args.smart_contracts
-            )
-            progress.update(task, completed=True)
+        load_cve_data(
+            kb,
+            cve_id=args.id,
+            keyword=args.keyword,
+            max_results=args.max_results,
+            load_smart_contracts=args.smart_contracts
+        )
+        progress.update(task, completed=True)
         
         console.print("\n[bold green]CVE data loaded into knowledge base successfully.[/bold green]")
         console.print("\nYou can now run the agent with: [cyan]python main.py scan <target>[/cyan]")

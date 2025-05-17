@@ -39,6 +39,7 @@ class CVEKnowledgeQuery:
             model_name: Model to use for queries (default: gpt-4o-mini)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        logger.info(f"Initializing CVEKnowledgeQuery with API key: {'Set' if self.api_key else 'Not set'}")
         self.model_name = model_name
         self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
         self.cve_loader = CVEDataLoader()
@@ -54,6 +55,8 @@ class CVEKnowledgeQuery:
         Returns:
             Dictionary containing CVE knowledge and risk assessment
         """
+        logger.info(f"🔍 CVEKnowledgeQuery.query_by_input_type called with input_type: {input_type}, input_value: {input_value}")
+        
         # For demo, we'll use mocked responses
         # In a real implementation, this would query a knowledge base or API
         
@@ -67,6 +70,7 @@ class CVEKnowledgeQuery:
         elif input_type == 'solidity_contract':
             return self._query_solidity_vulnerabilities(input_value)
         else:
+            logger.warning(f"Unsupported input type: {input_type}")
             return {
                 "error": f"Unsupported input type: {input_type}",
                 "cves": [],
@@ -120,7 +124,19 @@ class CVEKnowledgeQuery:
         cve_string = self._format_cve_data_for_prompt(cve_data)
         
         # Get response from LLM
-        response = self.llm.invoke(prompt.format(url=url, cve_data=cve_string))
+        logger.info("🔍 About to call OpenAI API for CVE knowledge query. API key is: " + 
+                   ('Set' if self.api_key else 'Not set') + 
+                   f", Model: {self.model_name}")
+        try:
+            formatted_prompt = prompt.format(url=url, cve_data=cve_string)
+            logger.debug(f"Sending prompt to OpenAI: {formatted_prompt[:200]}...")  # Log first 200 chars
+            
+            response = self.llm.invoke(formatted_prompt)
+            logger.info("✅ Successfully received response from OpenAI API for CVE query")
+            logger.debug(f"Raw response from OpenAI: {response.content[:200]}...")  # Log first 200 chars
+        except Exception as e:
+            logger.error(f"❌ Failed to call OpenAI API for CVE query: {str(e)}", exc_info=True)
+            return self._get_fallback_website_response(url)
         
         # Try to parse the response as JSON
         try:

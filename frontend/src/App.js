@@ -18,6 +18,8 @@ function App() {
     maxResults: 20,
     loadSmartContracts: false
   });
+  const [githubToken, setGithubToken] = useState('');
+  const [tokenSaved, setTokenSaved] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,18 +39,43 @@ function App() {
     setResults(null);
     
     try {
+      // Set GitHub token if provided and this is a repository scan
+      const isGithubRepo = url.includes('github.com');
+      if (isGithubRepo && githubToken && !tokenSaved) {
+        try {
+          const tokenResponse = await fetch('http://localhost:8080/api/set-github-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token: githubToken }),
+          });
+          
+          if (tokenResponse.ok) {
+            setTokenSaved(true);
+            console.log('GitHub token saved');
+          } else {
+            const tokenError = await tokenResponse.json();
+            console.error('Error saving token:', tokenError);
+          }
+        } catch (err) {
+          console.error('Error setting GitHub token:', err);
+        }
+      }
+
       let response;
       
       if (inputType === 'url') {
         // Handle URL scan
+        const isRepo = url.includes('github.com');
         response = await fetch('http://localhost:8080/api/scan', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ 
-            url,
-            scan_type: 'github_repo'
+            target: url,
+            is_repo: isRepo
           }),
         });
       } else {
@@ -231,23 +258,103 @@ function App() {
       info: []
     };
     
-    // Organize findings by severity
-    const vulnerabilities = results.vulnerabilities || [];
-    vulnerabilities.forEach(vuln => {
-      const severity = vuln.severity?.toLowerCase() || 'high';
-      if (findingsBySeverity[severity]) {
-        findingsBySeverity[severity].push(vuln);
-      } else {
-        findingsBySeverity.high.push(vuln);
+    // Extract vulnerabilities from the correct location in the response
+    // The backend puts them in aggregated_results or directly in findings
+    let vulnerabilities = [];
+    
+    // Check for findings in various locations in the response structure
+    if (results.aggregated_results && results.aggregated_results.findings) {
+      vulnerabilities = results.aggregated_results.findings;
+    } else if (results.findings) {
+      vulnerabilities = results.findings;
+    } else if (results.tool_results) {
+      // Extract findings from tool results if that's where they are
+      results.tool_results.forEach(toolResult => {
+        if (toolResult.findings && Array.isArray(toolResult.findings)) {
+          vulnerabilities = [...vulnerabilities, ...toolResult.findings];
+        }
+      });
+    } else if (results.vulnerabilities) {
+      // Fall back to the original location if somehow that's used
+      vulnerabilities = results.vulnerabilities;
+    }
+    
+    console.log('Extracted vulnerabilities:', vulnerabilities);
+    
+    // Process findings by severity
+    if (Array.isArray(vulnerabilities)) {
+      vulnerabilities.forEach(vuln => {
+        const severity = vuln.severity?.toLowerCase() || 'high';
+        if (findingsBySeverity[severity]) {
+          findingsBySeverity[severity].push(vuln);
+        } else {
+          findingsBySeverity.high.push(vuln);
+        }
+      });
+    } else if (results.aggregated_results && results.aggregated_results.findings_by_severity) {
+      // Handle case where backend provides findings already organized by severity
+      const findingsBySeverityObj = results.aggregated_results.findings_by_severity;
+      
+      // Get full findings details from appropriate place in response
+      const findingDetails = {};
+      if (results.aggregated_results.details && Array.isArray(results.aggregated_results.details)) {
+        results.aggregated_results.details.forEach(detail => {
+          if (detail.id) {
+            findingDetails[detail.id] = detail;
+          }
+        });
       }
-    });
+      
+      // Process each severity level
+      Object.entries(findingsBySeverityObj).forEach(([severity, count]) => {
+        const lowercaseSeverity = severity.toLowerCase();
+        if (lowercaseSeverity in findingsBySeverity) {
+          // Create placeholder findings based on the count
+          for (let i = 0; i < count; i++) {
+            findingsBySeverity[lowercaseSeverity].push({
+              name: `${severity} Severity Issue`,
+              severity: severity,
+              description: `Security issue detected with ${severity} severity`
+            });
+          }
+        }
+      });
+    }
     
     // Get total count of findings
     const totalFindings = Object.values(findingsBySeverity).reduce(
       (sum, findings) => sum + findings.length, 0
     );
     
-    if (totalFindings === 0) {
+    // If the backend returns total findings but we couldn't extract them correctly,
+    // use the backend's count
+    if (totalFindings === 0 && results.aggregated_results && results.aggregated_results.total_findings > 0) {
+      // Check if we have findings by severity from backend
+      if (results.aggregated_results.findings_by_severity) {
+        const findingsBySeverityFromBackend = results.aggregated_results.findings_by_severity;
+        
+        // Create simple findings objects for each severity level
+        Object.entries(findingsBySeverityFromBackend).forEach(([severity, count]) => {
+          const lowercaseSeverity = severity.toLowerCase();
+          if (lowercaseSeverity in findingsBySeverity) {
+            for (let i = 0; i < count; i++) {
+              findingsBySeverity[lowercaseSeverity].push({
+                name: `${severity} Severity Issue`,
+                severity: severity,
+                description: `Security issue detected with ${severity} severity. See summary for details.`
+              });
+            }
+          }
+        });
+      }
+    }
+    
+    // Recalculate total findings after possible adjustments
+    const recalculatedTotalFindings = Object.values(findingsBySeverity).reduce(
+      (sum, findings) => sum + findings.length, 0
+    );
+    
+    if (recalculatedTotalFindings === 0) {
       return (
         <div className="gemini-card no-vulnerabilities">
           <div className="success-icon">✓</div>
@@ -373,13 +480,75 @@ function App() {
                 <h5>Remediation Suggestions</h5>
                 <ul>
                   {results.summary.remediation_suggestions.map((suggestion, idx) => (
-                    <li key={idx}>{suggestion}</li>
+                    <li key={idx}>
+                      {typeof suggestion === 'object' ? 
+                        (suggestion.finding ? 
+                          <>
+                            <strong>{suggestion.finding}</strong>
+                            {suggestion.suggestion && <>: {suggestion.suggestion}</>}
+                          </> 
+                          : JSON.stringify(suggestion))
+                        : suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {results.summary.technical_findings && results.summary.technical_findings.length > 0 && (
+              <div className="technical-findings">
+                <h5>Technical Findings</h5>
+                <ul>
+                  {results.summary.technical_findings.map((finding, idx) => (
+                    <li key={idx}>
+                      {typeof finding === 'object' ? 
+                        (finding.name || finding.description ? 
+                          <>
+                            {finding.name && <strong>{finding.name}</strong>}
+                            {finding.description && <>: {finding.description}</>}
+                          </> 
+                          : JSON.stringify(finding))
+                        : finding}
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
           </div>
         )}
+        
+        {/* Debug information section - now always visible during development */}
+        <div className="debug-section">
+          <details open>
+            <summary>Debug Information (Developer View)</summary>
+            {error && (
+              <div className="error-card">
+                <span className="error-icon">⚠️</span> {error}
+              </div>
+            )}
+            <div className="debug-container">
+              <p><strong>Note:</strong> This section shows the raw response data from the backend for debugging purposes.</p>
+              <pre className="debug-json">
+                {JSON.stringify(results, null, 2)}
+              </pre>
+              {/* Add special handling for structure analysis */}
+              {results && results.summary && (
+                <div className="response-structure">
+                  <h5>Response Structure Analysis:</h5>
+                  <p>Summary Type: {typeof results.summary}</p>
+                  {results.summary.remediation_suggestions && (
+                    <p>Remediation Suggestions: Array with {results.summary.remediation_suggestions.length} items, 
+                      first item type: {typeof results.summary.remediation_suggestions[0]}</p>
+                  )}
+                  {results.summary.technical_findings && (
+                    <p>Technical Findings: Array with {results.summary.technical_findings.length} items, 
+                      first item type: {typeof results.summary.technical_findings[0]}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
       </div>
     );
   };
@@ -410,6 +579,14 @@ function App() {
         {!loading && results && (
           <div className="content-area">
             {renderFindings()}
+            
+            {/* Display any error messages */}
+            {error && (
+              <div className="gemini-card error-card">
+                <div className="error-icon">❌</div>
+                <p>{error}</p>
+              </div>
+            )}
           </div>
         )}
         
@@ -440,6 +617,22 @@ function App() {
                     placeholder="Enter GitHub repository URL"
                     className="gemini-input"
                   />
+                  {url.includes('github.com') && (
+                    <div className="github-token-input">
+                      <label htmlFor="github-token">GitHub Token (Optional):</label>
+                      <input
+                        type="password"
+                        id="github-token"
+                        value={githubToken}
+                        onChange={(e) => {
+                          setGithubToken(e.target.value);
+                          setTokenSaved(false);
+                        }}
+                        placeholder="GitHub personal access token for API access"
+                      />
+                      {tokenSaved && <span className="token-status">✓ Token set</span>}
+                    </div>
+                  )}
                   <button 
                     type="submit" 
                     className="gemini-submit-btn"

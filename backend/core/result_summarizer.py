@@ -38,6 +38,7 @@ class ResultSummarizer:
             model_name: Model to use for summaries (default: gpt-4o-mini)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        logger.info(f"Initializing ResultSummarizer with API key: {'Set' if self.api_key else 'Not set'}")
         self.model_name = model_name
         self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
     
@@ -58,6 +59,8 @@ class ResultSummarizer:
             return self._get_fallback_summary(aggregated_results)
             
         logger.info(f"Generating summary for scan {aggregated_results.get('scan_id')}")
+        logger.debug(f"🔍 Aggregated results keys: {aggregated_results.keys()}")
+        logger.debug(f"🔍 Aggregated results total_findings: {aggregated_results.get('total_findings')}")
         
         # Extract key information for the summary
         target = aggregated_results.get('target', 'Unknown')
@@ -121,15 +124,32 @@ class ResultSummarizer:
         
         cve_list = "\n".join(cves) if cves else "None"
         
+        logger.info("🔍 About to call OpenAI API for generating summary. API key is: " + 
+                    ('Set' if self.api_key else 'Not set') + 
+                    f", Model: {self.model_name}")
+        logger.debug(f"🔍 Detailed findings count: {len(findings)}")
+        
         # Generate the summary
-        response = self.llm.invoke(prompt.format(
-            target=target,
-            input_type=input_type,
-            total_findings=total_findings,
-            severity_summary=severity_summary,
-            detailed_findings=detailed_findings,
-            cves=cve_list
-        ))
+        try:
+            formatted_prompt = prompt.format(
+                target=target,
+                input_type=input_type,
+                total_findings=total_findings,
+                severity_summary=severity_summary,
+                detailed_findings=detailed_findings,
+                cves=cve_list
+            )
+            logger.debug(f"🔍 Sending prompt to OpenAI (first 200 chars): {formatted_prompt[:200]}...")
+            
+            logger.info("🚀 CALLING OPENAI API NOW - START")
+            response = self.llm.invoke(formatted_prompt)
+            logger.info("🚀 CALLING OPENAI API NOW - COMPLETE")
+            
+            logger.info("✅ Successfully received response from OpenAI API")
+            logger.debug(f"✅ Raw response from OpenAI: {response.content[:200]}...")  # Log first 200 chars of response
+        except Exception as e:
+            logger.error(f"❌ Failed to call OpenAI API: {str(e)}", exc_info=True)
+            return self._get_fallback_summary(aggregated_results)
         
         # Try to parse the response as JSON
         try:
@@ -142,11 +162,14 @@ class ResultSummarizer:
                 if start_idx >= 0 and end_idx > start_idx:
                     json_str = content[start_idx:end_idx]
                     result = json.loads(json_str)
+                    logger.info("✅ Successfully parsed JSON response from OpenAI API")
                     return result
             
             # If we couldn't extract valid JSON, return a fallback response
+            logger.warning("⚠️ Could not extract valid JSON from OpenAI API response")
             return self._get_fallback_summary(aggregated_results)
-        except:
+        except Exception as e:
+            logger.error(f"❌ Error parsing OpenAI API response: {str(e)}")
             return self._get_fallback_summary(aggregated_results)
     
     def _get_fallback_summary(self, aggregated_results: Dict) -> Dict:

@@ -193,3 +193,21 @@ class SecurityToolSelector:
             })
         
         return selected_tools 
+
+
+class ToolSelector(SecurityToolSelector):
+    """
+    Alias for SecurityToolSelector for backward compatibility.
+    """
+    
+    def select_tools_for_content_type(self, content_type: str) -> List:
+        """
+        Select appropriate security tools based on content type.
+        
+        Args:
+            content_type: Type of content ('website' or 'solidity_contract')
+            
+        Returns:
+            List containing selected tools and their configuration
+        """
+        return self.select_tools(content_type, {}) 

@@ -119,6 +119,13 @@ class InputHandler:
                     "message": f"Invalid GitHub URL format: {repo_url}"
                 }
             
+            # Use token if provided (use the latest value from environment)
+            token = os.environ.get("GITHUB_TOKEN")
+            if token and token != self.github_token:
+                logger.info("Using GitHub token from environment variable")
+                self.github_token = token
+                self.github_client = Github(self.github_token, retry=3, timeout=30)
+            
             # Check remaining rate limit before starting
             rate_limit = self.github_client.get_rate_limit()
             logger.info(f"GitHub API Rate Limit: {rate_limit.core.remaining}/{rate_limit.core.limit} remaining")
@@ -132,6 +139,14 @@ class InputHandler:
                     if not self.github_token:
                         logger.warning("Rate limit very low. Consider providing a GitHub token using --token")
                     
+                    # If no requests remaining, return an error immediately without making more requests
+                    if rate_limit.core.remaining < 5:
+                        logger.error("GitHub API rate limit too low to proceed")
+                        return {
+                            "type": "error",
+                            "message": f"GitHub API rate limit too low ({rate_limit.core.remaining} remaining). Please try again in {int(reset_time/60)} minutes or provide a GitHub token."
+                        }
+                        
                     # If extremely low, wait a bit before proceeding
                     if rate_limit.core.remaining < 10:
                         wait_time = min(30, max(5, reset_time/10))  # Wait up to 30 seconds
@@ -149,6 +164,44 @@ class InputHandler:
                     "message": "GitHub API rate limit exceeded. Try again later or use a GitHub token."
                 }
             
+            # First try to determine if the repository contains Solidity files using the search API
+            # This is more efficient than downloading all files
+            try:
+                solidity_search = repo.get_contents("", ref="master")
+                has_solidity = False
+                
+                # Quick check for Solidity files in the root
+                for item in solidity_search:
+                    if item.name.endswith('.sol'):
+                        has_solidity = True
+                        break
+                
+                # If not found in root, check for common Solidity directories
+                if not has_solidity:
+                    common_solidity_dirs = ["contracts", "src", "solidity", "ethereum"]
+                    for dir_name in common_solidity_dirs:
+                        try:
+                            contents = repo.get_contents(dir_name)
+                            for item in contents:
+                                if item.name.endswith('.sol'):
+                                    has_solidity = True
+                                    break
+                            if has_solidity:
+                                break
+                        except:
+                            continue
+                
+                # If we detected Solidity files, set the type early
+                if has_solidity:
+                    logger.info(f"Detected Solidity contract repository: {repo.full_name}")
+                    repo_type = "solidity_contract"
+                else:
+                    logger.info(f"No Solidity files found in common directories, treating as web application")
+                    repo_type = "web_application"
+            except Exception as e:
+                logger.warning(f"Error during preliminary Solidity detection: {str(e)}")
+                repo_type = "unknown"  # Will be determined after file download
+            
             # Create a temporary directory for storing files we want to analyze
             self.temp_dir = tempfile.mkdtemp(prefix="security_agent_")
             logger.info(f"Created temporary directory: {self.temp_dir}")
@@ -157,7 +210,6 @@ class InputHandler:
             files = []
             solidity_files = []
             file_count = 0
-            web_files_count = 0
             
             # Get the root contents
             try:
@@ -222,6 +274,7 @@ class InputHandler:
                     # Return what we have so far with a warning
                     if files:
                         logger.warning(f"Rate limit exceeded. Only {len(files)} files were processed")
+                        # Check if we found any Solidity files despite rate limit
                         if any(f.endswith('.sol') for f in files):
                             return {
                                 "type": "solidity_contract",
@@ -235,7 +288,7 @@ class InputHandler:
                             }
                         else:
                             return {
-                                "type": "web_application",
+                                "type": repo_type,  # Use the type we detected earlier
                                 "input": repo_url,
                                 "files": files,
                                 "source": "github",
@@ -271,20 +324,25 @@ class InputHandler:
                     "message": "No analyzable files found in the repository."
                 }
             
-            # Check if any Solidity files were found
-            if solidity_files:
+            # Perform final check for Solidity files in downloaded files
+            downloaded_solidity_files = [f for f in files if f.endswith('.sol')]
+            
+            # If Solidity files were found, classify as solidity_contract regardless of initial determination
+            if downloaded_solidity_files:
+                logger.info(f"Found {len(downloaded_solidity_files)} Solidity files in repository")
                 return {
                     "type": "solidity_contract",
                     "input": repo_url,
-                    "files": [f for f in files if f.endswith('.sol')],
+                    "files": downloaded_solidity_files,
                     "source": "github",
                     "repo_url": repo_url,
-                    "is_multiple": len(solidity_files) > 1
+                    "is_multiple": len(downloaded_solidity_files) > 1
                 }
             
-            # Otherwise, classify as a web application
+            # Otherwise, use the preliminary type or classify as a web application
+            logger.info(f"Classifying repository as: {repo_type}")
             return {
-                "type": "web_application",
+                "type": repo_type,
                 "input": repo_url,
                 "files": files,
                 "source": "github",
@@ -409,6 +467,20 @@ class InputHandler:
             return False
         
         return file_path.endswith(".sol")
+    
+    def process_input(self, user_input: str) -> Dict:
+        """
+        Process input and return validated result.
+        This method is a wrapper for validate_and_classify to maintain backward compatibility.
+        
+        Args:
+            user_input: Input string to process
+            
+        Returns:
+            Dictionary containing the processed input result
+        """
+        logger.debug(f"Processing input: {user_input}")
+        return self.validate_and_classify(user_input)
     
     def cleanup(self):
         """Clean up any temporary directories created during processing"""
