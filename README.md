@@ -224,42 +224,39 @@ python demo.py contract1.sol contract2.sol --output results.json
 
 #### GitHub Repository Scanning
 
-Scan entire GitHub repositories by providing the repository URL:
+You can scan a GitHub repository for security vulnerabilities by entering a GitHub URL in the frontend. This feature allows you to analyze Solidity smart contracts hosted on GitHub repositories.
 
-```
-python demo.py --repo https://github.com/username/repository
-```
+### Requirements
 
-The agent will:
-1. Access the repository through the GitHub API
-2. Analyze all relevant files (Solidity contracts, web files, etc.)
-3. Generate a comprehensive security report
-4. Clean up temporary files automatically
+1. Both the backend server and frontend application must be running locally.
+2. For private repositories or to avoid API rate limits, a GitHub Personal Access Token is recommended.
 
-For private repositories, you'll need to provide a GitHub access token:
+### How to Use
 
-```
-python demo.py --repo https://github.com/username/repository --token YOUR_GITHUB_TOKEN
-```
+1. Start the backend server:
+   ```
+   cd /path/to/sec-agent
+   PORT=8080 GITHUB_TOKEN=your_github_token OPENAI_API_KEY=your_openai_key python -m api.server
+   ```
 
-##### Handling GitHub API Rate Limits
+2. Start the frontend:
+   ```
+   cd /path/to/sec-agent/frontend
+   npm start
+   ```
 
-When scanning large repositories, you may encounter GitHub API rate limits. The tool has been designed to:
-- Process files in small batches
-- Implement smart retries with exponential backoff
-- Return partial results when possible
+3. Open your browser and navigate to `http://localhost:3000`
 
-To avoid rate limiting issues:
-- **Use a GitHub token** - Authenticated requests have higher rate limits
-- **Scan smaller repositories** - Repositories with fewer files are less likely to hit limits
-- **Avoid scanning multiple repositories in quick succession**
+4. Enter a GitHub repository URL in the input field and click the submit button.
 
-If a rate limit is hit, the tool will:
-- Complete the scan with the files already downloaded
-- Show a warning about the incomplete results
-- Provide instructions for getting more complete results
+5. Optionally, you can provide a GitHub token for scanning private repositories or to avoid rate limits.
 
-You can [create a GitHub personal access token](https://github.com/settings/tokens) with `repo` scope to access private repositories and increase rate limits.
+6. View the scan results organized by severity in the tabbed interface:
+   - Summary tab: Shows the executive summary and overall assessment
+   - Issues tab: Displays security issues categorized by severity (High, Medium, Low, Info)
+   - Debug tab: Shows raw response data for debugging
+
+For more detailed information about the GitHub scanning feature, please refer to [README-github-scanning.md](./README-github-scanning.md).
 
 #### Recursive Directory Scanning
 

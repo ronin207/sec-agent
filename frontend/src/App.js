@@ -20,6 +20,14 @@ function App() {
   });
   const [githubToken, setGithubToken] = useState('');
   const [tokenSaved, setTokenSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [activeSeverity, setActiveSeverity] = useState('high');
+  const [inputExpanded, setInputExpanded] = useState(false);
+
+  // Handle expanding/collapsing input container
+  const toggleInputContainer = () => {
+    setInputExpanded(!inputExpanded);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -364,191 +372,307 @@ function App() {
       );
     }
     
+    // Render tabs and findings based on active tab
     return (
       <div className="findings-section">
         <div className="findings-summary">
           <h3>Security Scan Results</h3>
+          
+          {/* Main tabs */}
+          <div className="findings-tabs">
+            <button 
+              className={`tab-button ${activeTab === 'summary' ? 'active' : ''}`}
+              onClick={() => setActiveTab('summary')}
+            >
+              Summary
+            </button>
+            <button 
+              className={`tab-button ${activeTab === 'issues' ? 'active' : ''}`}
+              onClick={() => setActiveTab('issues')}
+            >
+              Issues
+            </button>
+            <button 
+              className={`tab-button ${activeTab === 'debug' ? 'active' : ''}`}
+              onClick={() => setActiveTab('debug')}
+            >
+              Debug
+            </button>
+          </div>
+          
+          {/* Severity count badges - always visible */}
           <div className="findings-summary-counts">
-            <div className="severity-count high">
+            <div 
+              className={`severity-count high ${activeTab === 'issues' && activeSeverity === 'high' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('issues');
+                setActiveSeverity('high');
+              }}
+            >
               <span className="count">{findingsBySeverity.high.length}</span>
               <span className="label">High</span>
             </div>
-            <div className="severity-count medium">
+            <div 
+              className={`severity-count medium ${activeTab === 'issues' && activeSeverity === 'medium' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('issues');
+                setActiveSeverity('medium');
+              }}
+            >
               <span className="count">{findingsBySeverity.medium.length}</span>
               <span className="label">Medium</span>
             </div>
-            <div className="severity-count low">
+            <div 
+              className={`severity-count low ${activeTab === 'issues' && activeSeverity === 'low' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('issues');
+                setActiveSeverity('low');
+              }}
+            >
               <span className="count">{findingsBySeverity.low.length}</span>
               <span className="label">Low</span>
             </div>
-            <div className="severity-count info">
+            <div 
+              className={`severity-count info ${activeTab === 'issues' && activeSeverity === 'info' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('issues');
+                setActiveSeverity('info');
+              }}
+            >
               <span className="count">{findingsBySeverity.info.length}</span>
               <span className="label">Info</span>
             </div>
           </div>
         </div>
         
-        {/* High severity findings */}
-        {findingsBySeverity.high.length > 0 && (
-          <div className="findings-group">
-            <h4 className="severity high">High Severity</h4>
-            {findingsBySeverity.high.map((finding, idx) => (
-              <div key={idx} className="gemini-card finding-card">
-                <div className="finding-header">
-                  <h5>{finding.name || 'Security Vulnerability'}</h5>
-                  <span className="severity-badge high">High</span>
-                </div>
-                <p className="finding-description">{finding.description}</p>
-                {finding.location && (
-                  <div className="finding-location">
-                    <strong>Location:</strong> {finding.location}
+        {/* Conditional rendering based on active tab */}
+        {activeTab === 'summary' && (
+          <div className="tab-content">
+            {results.summary && (
+              <div className="gemini-card summary-card">
+                <h4>Executive Summary</h4>
+                <p>{results.summary.summary}</p>
+                
+                <h5>Risk Assessment: <span className={`risk-level ${results.summary.risk_assessment?.toLowerCase()}`}>
+                  {results.summary.risk_assessment || 'Unknown'}
+                </span></h5>
+                
+                {results.summary.remediation_suggestions && results.summary.remediation_suggestions.length > 0 && (
+                  <div className="remediation-suggestions">
+                    <h5>Remediation Suggestions</h5>
+                    <ul>
+                      {results.summary.remediation_suggestions.map((suggestion, idx) => (
+                        <li key={idx}>
+                          {typeof suggestion === 'object' ? 
+                            (suggestion.finding ? 
+                              <>
+                                <strong>{suggestion.finding}</strong>
+                                {suggestion.suggestion && <>: {suggestion.suggestion}</>}
+                              </> 
+                              : JSON.stringify(suggestion))
+                            : suggestion}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-                {finding.recommendation && (
-                  <div className="finding-recommendation">
-                    <strong>Recommendation:</strong> {finding.recommendation}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {/* Medium severity findings */}
-        {findingsBySeverity.medium.length > 0 && (
-          <div className="findings-group">
-            <h4 className="severity medium">Medium Severity</h4>
-            {findingsBySeverity.medium.map((finding, idx) => (
-              <div key={idx} className="gemini-card finding-card">
-                <div className="finding-header">
-                  <h5>{finding.name || 'Security Vulnerability'}</h5>
-                  <span className="severity-badge medium">Medium</span>
-                </div>
-                <p className="finding-description">{finding.description}</p>
-                {finding.location && (
-                  <div className="finding-location">
-                    <strong>Location:</strong> {finding.location}
-                  </div>
-                )}
-                {finding.recommendation && (
-                  <div className="finding-recommendation">
-                    <strong>Recommendation:</strong> {finding.recommendation}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {/* Low and Info severity findings */}
-        {findingsBySeverity.low.length > 0 && (
-          <div className="findings-group">
-            <h4 className="severity low">Low Severity</h4>
-            {findingsBySeverity.low.map((finding, idx) => (
-              <div key={idx} className="gemini-card finding-card">
-                <div className="finding-header">
-                  <h5>{finding.name || 'Security Vulnerability'}</h5>
-                  <span className="severity-badge low">Low</span>
-                </div>
-                <p className="finding-description">{finding.description}</p>
-                {finding.location && (
-                  <div className="finding-location">
-                    <strong>Location:</strong> {finding.location}
-                  </div>
-                )}
-                {finding.recommendation && (
-                  <div className="finding-recommendation">
-                    <strong>Recommendation:</strong> {finding.recommendation}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {results.summary && (
-          <div className="gemini-card summary-card">
-            <h4>Executive Summary</h4>
-            <p>{results.summary.summary}</p>
-            
-            <h5>Risk Assessment: <span className={`risk-level ${results.summary.risk_assessment?.toLowerCase()}`}>
-              {results.summary.risk_assessment || 'Unknown'}
-            </span></h5>
-            
-            {results.summary.remediation_suggestions && results.summary.remediation_suggestions.length > 0 && (
-              <div className="remediation-suggestions">
-                <h5>Remediation Suggestions</h5>
-                <ul>
-                  {results.summary.remediation_suggestions.map((suggestion, idx) => (
-                    <li key={idx}>
-                      {typeof suggestion === 'object' ? 
-                        (suggestion.finding ? 
-                          <>
-                            <strong>{suggestion.finding}</strong>
-                            {suggestion.suggestion && <>: {suggestion.suggestion}</>}
-                          </> 
-                          : JSON.stringify(suggestion))
-                        : suggestion}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
-            {results.summary.technical_findings && results.summary.technical_findings.length > 0 && (
-              <div className="technical-findings">
-                <h5>Technical Findings</h5>
-                <ul>
-                  {results.summary.technical_findings.map((finding, idx) => (
-                    <li key={idx}>
-                      {typeof finding === 'object' ? 
-                        (finding.name || finding.description ? 
-                          <>
-                            {finding.name && <strong>{finding.name}</strong>}
-                            {finding.description && <>: {finding.description}</>}
-                          </> 
-                          : JSON.stringify(finding))
-                        : finding}
-                    </li>
-                  ))}
-                </ul>
+                {results.summary && results.summary.technical_findings && results.summary.technical_findings.length > 0 && (
+                  <div className="technical-findings">
+                    <h5>Technical Findings</h5>
+                    {(() => {
+                      // Group findings by vulnerability type
+                      const groupedFindings = {};
+                      
+                      results.summary.technical_findings.forEach(finding => {
+                        // Extract base text from different formats
+                        let text = '';
+                        if (typeof finding === 'string') {
+                          text = finding;
+                        } else if (typeof finding === 'object') {
+                          text = finding.name || finding.description || JSON.stringify(finding);
+                        }
+                        
+                        // Extract vulnerability type using various patterns
+                        let vulnType = '';
+                        
+                        // Common vulnerability naming patterns
+                        const patterns = [
+                          /^(Reentrancy|Integer Overflow|Unchecked (Send|Return|Call)|DoS|Function Visibility|Outdated Compiler|Variable Naming)(?:\s+[^:]+)?:/i,
+                          /^(Reentrancy|Integer Overflow|Unchecked (Send|Return|Call)|DoS|Function Visibility|Outdated Compiler|Variable Naming)/i
+                        ];
+                        
+                        // Try to match against known vulnerability patterns
+                        for (const pattern of patterns) {
+                          const match = text.match(pattern);
+                          if (match) {
+                            vulnType = match[1];
+                            break;
+                          }
+                        }
+                        
+                        // If no pattern matched, use first part of text or before colon
+                        if (!vulnType) {
+                          const colonMatch = text.match(/^([^:]+):/);
+                          if (colonMatch) {
+                            vulnType = colonMatch[1].trim();
+                          } else {
+                            // Fallback to first few words
+                            const words = text.split(' ');
+                            vulnType = words.length > 1 ? words.slice(0, 2).join(' ') : text;
+                          }
+                        }
+                        
+                        // Extract location from object or text
+                        let location = '';
+                        if (typeof finding === 'object' && finding.location) {
+                          location = finding.location;
+                        } else {
+                          // Try to extract line numbers from the text using various patterns
+                          const linePatterns = [
+                            /line[s]?\s+(\d+(?:-\d+)?)/i,
+                            /at line[s]?\s+(\d+(?:-\d+)?)/i,
+                            /in line[s]?\s+(\d+(?:-\d+)?)/i,
+                            /\(line[s]?\s+(\d+(?:-\d+)?)\)/i
+                          ];
+                          
+                          for (const pattern of linePatterns) {
+                            const match = text.match(pattern);
+                            if (match) {
+                              location = match[1];
+                              break;
+                            }
+                          }
+                        }
+                        
+                        // Create or add to grouped findings
+                        if (!groupedFindings[vulnType]) {
+                          groupedFindings[vulnType] = {
+                            description: text,
+                            locations: []
+                          };
+                        }
+                        
+                        if (location && !groupedFindings[vulnType].locations.includes(location)) {
+                          groupedFindings[vulnType].locations.push(location);
+                        }
+                      });
+                      
+                      // Render grouped findings
+                      return (
+                        <ul>
+                          {Object.entries(groupedFindings).map(([type, data], idx) => (
+                            <li key={idx}>
+                              <strong>{type}</strong>
+                              {data.locations.length > 0 ? (
+                                <ul className="finding-locations">
+                                  <li>Lines: {data.locations.join(', ')}</li>
+                                </ul>
+                              ) : (
+                                <p className="finding-description">{data.description}</p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
         
-        {/* Debug information section - now always visible during development */}
-        <div className="debug-section">
-          <details open>
-            <summary>Debug Information (Developer View)</summary>
-            {error && (
-              <div className="error-card">
-                <span className="error-icon">⚠️</span> {error}
+        {activeTab === 'issues' && (
+          <div className="tab-content">
+            {/* Severity tabs */}
+            <div className="severity-tabs">
+              <button 
+                className={`severity-tab high ${activeSeverity === 'high' ? 'active' : ''}`}
+                onClick={() => setActiveSeverity('high')}
+              >
+                High ({findingsBySeverity.high.length})
+              </button>
+              <button 
+                className={`severity-tab medium ${activeSeverity === 'medium' ? 'active' : ''}`}
+                onClick={() => setActiveSeverity('medium')}
+              >
+                Medium ({findingsBySeverity.medium.length})
+              </button>
+              <button 
+                className={`severity-tab low ${activeSeverity === 'low' ? 'active' : ''}`}
+                onClick={() => setActiveSeverity('low')}
+              >
+                Low ({findingsBySeverity.low.length})
+              </button>
+              <button 
+                className={`severity-tab info ${activeSeverity === 'info' ? 'active' : ''}`}
+                onClick={() => setActiveSeverity('info')}
+              >
+                Info ({findingsBySeverity.info.length})
+              </button>
+            </div>
+            
+            {/* Display findings of the active severity */}
+            {findingsBySeverity[activeSeverity].length > 0 ? (
+              <div className="findings-list">
+                {findingsBySeverity[activeSeverity].map((finding, idx) => (
+                  <div key={idx} className="gemini-card finding-card">
+                    <div className="finding-header">
+                      <h5>{finding.name || 'Security Vulnerability'}</h5>
+                      <span className={`severity-badge ${activeSeverity}`}>
+                        {activeSeverity.charAt(0).toUpperCase() + activeSeverity.slice(1)}
+                      </span>
+                    </div>
+                    <p className="finding-description">{finding.description}</p>
+                    {finding.location && (
+                      <div className="finding-location">
+                        <strong>Location:</strong> {finding.location}
+                      </div>
+                    )}
+                    {finding.recommendation && (
+                      <div className="finding-recommendation">
+                        <strong>Recommendation:</strong> {finding.recommendation}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-findings">
+                <p>No {activeSeverity} severity findings detected.</p>
               </div>
             )}
-            <div className="debug-container">
-              <p><strong>Note:</strong> This section shows the raw response data from the backend for debugging purposes.</p>
-              <pre className="debug-json">
-                {JSON.stringify(results, null, 2)}
-              </pre>
-              {/* Add special handling for structure analysis */}
-              {results && results.summary && (
-                <div className="response-structure">
-                  <h5>Response Structure Analysis:</h5>
-                  <p>Summary Type: {typeof results.summary}</p>
-                  {results.summary.remediation_suggestions && (
-                    <p>Remediation Suggestions: Array with {results.summary.remediation_suggestions.length} items, 
-                      first item type: {typeof results.summary.remediation_suggestions[0]}</p>
-                  )}
-                  {results.summary.technical_findings && (
-                    <p>Technical Findings: Array with {results.summary.technical_findings.length} items, 
-                      first item type: {typeof results.summary.technical_findings[0]}</p>
-                  )}
-                </div>
-              )}
+          </div>
+        )}
+        
+        {activeTab === 'debug' && (
+          <div className="tab-content">
+            <div className="debug-section">
+              <div className="debug-container">
+                <p><strong>Note:</strong> This section shows the raw response data from the backend for debugging purposes.</p>
+                <pre className="debug-json">
+                  {JSON.stringify(results, null, 2)}
+                </pre>
+                {/* Add special handling for structure analysis */}
+                {results && results.summary && (
+                  <div className="response-structure">
+                    <h5>Response Structure Analysis:</h5>
+                    <p>Summary Type: {typeof results.summary}</p>
+                    {results.summary.remediation_suggestions && (
+                      <p>Remediation Suggestions: Array with {results.summary.remediation_suggestions.length} items, 
+                        first item type: {typeof results.summary.remediation_suggestions[0]}</p>
+                    )}
+                    {results.summary.technical_findings && (
+                      <p>Technical Findings: Array with {results.summary.technical_findings.length} items, 
+                        first item type: {typeof results.summary.technical_findings[0]}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </details>
-        </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -590,7 +714,8 @@ function App() {
           </div>
         )}
         
-        <div className="input-container">
+        <div className={`input-container ${inputExpanded ? 'expanded' : ''}`}>
+          <div className="input-handle" onClick={toggleInputContainer}></div>
           <div className="input-wrapper">
             <div className="input-type-selection">
               <button 
@@ -696,24 +821,21 @@ function App() {
             </form>
             
             <div className="action-buttons">
-              <button className="action-button">
+              <button className="action-button" title="Search">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
                   <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                Search
               </button>
-              <button className="action-button">
+              <button className="action-button" title="New Scan">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M12 4.5V19.5M19.5 12H4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                New Scan
               </button>
-              <button className="action-button">
+              <button className="action-button" title="History">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 16L8.586 11.414C8.96106 11.0391 9.46967 10.8284 10 10.8284C10.5303 10.8284 11.0389 11.0391 11.414 11.414L16 16M14 14L15.586 12.414C15.9611 12.0391 16.4697 11.8284 17 11.8284C17.5303 11.8284 18.0389 12.0391 18.414 12.414L20 14M14 8H14.01M6 20H18C18.5304 20 19.0391 19.7893 19.4142 19.4142C19.7893 19.0391 20 18.5304 20 18V6C20 5.46957 19.7893 4.96086 19.4142 4.58579C19.0391 4.21071 18.5304 4 18 4H6C5.46957 4 4.96086 4.21071 4.58579 4.58579C4.21071 4.96086 4 5.46957 4 6V18C4 18.5304 4.21071 19.0391 4.58579 19.4142C4.96086 19.7893 5.46957 20 6 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                History
               </button>
             </div>
           </div>
