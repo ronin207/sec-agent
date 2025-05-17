@@ -13,6 +13,7 @@ A Security AI Agent for automating vulnerability assessments for websites and sm
 - **Detailed Logging**: View comprehensive logs of tool execution and scan results
 - **Multiple File Scanning**: Scan multiple files or entire directories at once
 - **GitHub Repository Support**: Directly scan code from GitHub repositories
+- **Web Interface**: User-friendly frontend for scanning and viewing results
 
 ## Project Structure
 
@@ -310,3 +311,35 @@ In the current demo version, security tool execution is simulated. In a producti
 - Python 3.8+
 - OpenAI API key (GPT-4 or GPT-4o-mini recommended)
 - Python packages listed in requirements.txt
+
+## Web Interface
+
+The project includes a web-based frontend interface for easier interaction with the security agent:
+
+### Starting the Web Interface
+
+1. Start the backend server:
+   ```bash
+   cd /path/to/sec-agent
+   PORT=8080 GITHUB_TOKEN=your_github_token OPENAI_API_KEY=your_openai_key python -m api.server
+   ```
+
+2. Start the frontend development server:
+   ```bash
+   cd /path/to/sec-agent/frontend
+   npm start
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000`
+
+### Using the Web Interface
+
+The web interface allows you to:
+
+1. Input a GitHub repository URL or paste Solidity code directly
+2. View detailed security scan results in a user-friendly format
+3. See vulnerability findings with severity ratings and remediation suggestions
+
+For detailed information about scanning GitHub repositories through the frontend, see [README-github-scanning.md](./README-github-scanning.md).
+
+**Note**: Both the backend server and frontend must be running locally for all features to work properly.
