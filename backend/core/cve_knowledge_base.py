@@ -57,6 +57,11 @@ class CVEKnowledgeQuery:
         # For demo, we'll use mocked responses
         # In a real implementation, this would query a knowledge base or API
         
+        # Ensure input_value is a string to prevent attribute errors
+        if not isinstance(input_value, str):
+            logger.warning(f"Expected string input_value but got {type(input_value)}")
+            input_value = str(input_value) if input_value is not None else ""
+        
         if input_type == 'website':
             return self._query_website_vulnerabilities(input_value)
         elif input_type == 'solidity_contract':
@@ -250,25 +255,25 @@ class CVEKnowledgeQuery:
     def _get_fallback_solidity_response(self) -> Dict:
         """Get a fallback response for solidity vulnerabilities"""
         return {
-            "cves": [],  # Smart contract vulnerabilities don't typically have CVEs
+            "cves": [],  # Most smart contract vulnerabilities don't have CVE IDs yet
             "risks": [
                 {
                     "risk_level": "Critical",
-                    "description": "Potential reentrancy vulnerability in external calls",
-                    "affected_components": ["External contract interactions", "ETH transfers"],
-                    "mitigation": "Use the checks-effects-interactions pattern and consider using ReentrancyGuard"
+                    "description": "Potential reentrancy vulnerability allowing attackers to drain funds",
+                    "affected_components": ["External calls", "State changes after calls"],
+                    "mitigation": "Implement checks-effects-interactions pattern and use ReentrancyGuard"
                 },
                 {
                     "risk_level": "High",
                     "description": "Integer overflow/underflow in arithmetic operations",
-                    "affected_components": ["Token calculations", "Balance tracking"],
-                    "mitigation": "Use SafeMath library or Solidity 0.8.x which has built-in overflow protection"
+                    "affected_components": ["Token transfers", "Balance calculations"],
+                    "mitigation": "Use SafeMath library or Solidity 0.8+ with built-in overflow checks"
                 },
                 {
                     "risk_level": "Medium",
-                    "description": "Front-running vulnerability in transaction ordering",
-                    "affected_components": ["Price calculations", "Token swaps"],
-                    "mitigation": "Implement commit-reveal schemes or use transaction ordering protection"
+                    "description": "Insufficient access controls for critical functions",
+                    "affected_components": ["Owner functions", "Admin operations"],
+                    "mitigation": "Implement proper role-based access control (RBAC)"
                 }
             ]
         } 

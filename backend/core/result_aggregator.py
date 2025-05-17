@@ -2,10 +2,13 @@
 Result Aggregator module for the Security Agent.
 Handles aggregation and deduplication of security scan results.
 """
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import json
 from datetime import datetime
 import itertools
+import logging
+import hashlib
+from collections import defaultdict
 
 # Import helpers
 from backend.utils.helpers import get_logger
@@ -19,9 +22,10 @@ class ResultAggregator:
     """
     
     def __init__(self):
-        pass
+        """Initialize ResultAggregator."""
+        logger.info("Initializing ResultAggregator")
     
-    def aggregate_results(self, scan_results: Dict, cve_info: Dict) -> Dict:
+    def aggregate_results(self, scan_results: Dict, cve_info: Union[Dict, str, Any]) -> Dict:
         """
         Aggregate and deduplicate results from different security tools.
         
@@ -34,22 +38,101 @@ class ResultAggregator:
         """
         logger.info(f"Aggregating results for scan {scan_results.get('scan_id')}")
         
-        # Extract vulnerabilities from all tool results
+        # Ensure cve_info is a dictionary to prevent attribute errors
+        if not isinstance(cve_info, dict):
+            logger.warning(f"Expected dict for cve_info but got {type(cve_info)}. Converting to empty dict.")
+            cve_info = {}
+        
+        # Copy scan metadata
+        aggregated_results = {
+            "scan_id": scan_results.get("scan_id", ""),
+            "timestamp": scan_results.get("timestamp", ""),
+            "target": scan_results.get("target", ""),
+            "input_type": scan_results.get("input_type", ""),
+            "is_multiple": scan_results.get("is_multiple", False),
+            "execution_time": scan_results.get("execution_time", 0),
+            "findings_by_severity": {
+                "critical": [],
+                "high": [],
+                "medium": [],
+                "low": [],
+                "info": []
+            },
+            "stats": {
+                "total_findings": 0,
+                "total_unique_findings": 0,
+                "findings_by_severity_count": {
+                    "critical": 0,
+                    "high": 0, 
+                    "medium": 0,
+                    "low": 0,
+                    "info": 0
+                },
+                "findings_by_tool": {},
+                "duplicates_removed": 0
+            }
+        }
+        
+        # If multiple files were scanned, include file list
+        if scan_results.get("is_multiple") and scan_results.get("files"):
+            aggregated_results["files"] = scan_results.get("files")
+        
+        # Extract all findings
         all_findings = []
-        for tool_result in scan_results.get('tool_results', []):
-            findings = tool_result.get('findings', [])
+        for tool_result in scan_results.get("tool_results", []):
+            tool_name = tool_result.get("tool_name", "unknown")
+            findings = tool_result.get("findings", [])
             
-            # Add tool information to each finding
+            # Initialize stats for this tool
+            aggregated_results["stats"]["findings_by_tool"][tool_name] = {
+                "total": len(findings),
+                "unique": 0,
+                "by_severity": {
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "low": 0,
+                    "info": 0
+                }
+            }
+            
+            # Add tool name to each finding
             for finding in findings:
-                finding['source_tool'] = tool_result.get('tool_name')
-                finding['tool_id'] = tool_result.get('tool_id')
+                finding["tool"] = tool_name
                 all_findings.append(finding)
         
+        # Total raw findings before deduplication
+        total_raw_findings = len(all_findings)
+        aggregated_results["stats"]["total_raw_findings"] = total_raw_findings
+        
         # Deduplicate findings
-        deduplicated_findings = self._deduplicate_findings(all_findings)
+        unique_findings, duplicates_info = self._deduplicate_findings(all_findings)
+        
+        aggregated_results["stats"]["total_findings"] = total_raw_findings
+        aggregated_results["stats"]["total_unique_findings"] = len(unique_findings)
+        aggregated_results["stats"]["duplicates_removed"] = duplicates_info["total_duplicates"]
+        aggregated_results["stats"]["duplicate_groups"] = duplicates_info["duplicate_groups"]
+        
+        # Categorize findings by severity
+        for finding in unique_findings:
+            severity = finding.get("severity", "").lower()
+            if severity not in aggregated_results["findings_by_severity"]:
+                severity = "info"  # Default to info if severity is unknown
+            
+            # Add to the appropriate severity category
+            aggregated_results["findings_by_severity"][severity].append(finding)
+            
+            # Update severity count
+            aggregated_results["stats"]["findings_by_severity_count"][severity] += 1
+            
+            # Update tool-specific stats
+            tool_name = finding.get("tool", "unknown")
+            if tool_name in aggregated_results["stats"]["findings_by_tool"]:
+                aggregated_results["stats"]["findings_by_tool"][tool_name]["unique"] += 1
+                aggregated_results["stats"]["findings_by_tool"][tool_name]["by_severity"][severity] += 1
         
         # Map findings to CVE IDs when possible
-        mapped_findings = self._map_findings_to_cves(deduplicated_findings, cve_info)
+        mapped_findings = self._map_findings_to_cves(unique_findings, cve_info)
         
         # Group findings by severity
         grouped_findings = self._group_findings_by_severity(mapped_findings)
@@ -65,7 +148,8 @@ class ResultAggregator:
             "findings": mapped_findings,
             "cves": cve_info.get('cves', []),
             "execution_time": scan_results.get('execution_time', 0),
-            "tools_used": [tool.get('tool_name') for tool in scan_results.get('tool_results', [])]
+            "tools_used": [tool.get('tool_name') for tool in scan_results.get('tool_results', [])],
+            "stats": aggregated_results["stats"]
         }
         
         return aggregated_result
@@ -80,7 +164,26 @@ class ResultAggregator:
         Returns:
             JSON string of the aggregated results
         """
-        return json.dumps(aggregated_results, indent=2)
+        # Create a clean copy of the results with all relevant information
+        export_data = {
+            "scan_id": aggregated_results.get('scan_id'),
+            "timestamp": aggregated_results.get('timestamp'),
+            "target": aggregated_results.get('target'),
+            "input_type": aggregated_results.get('input_type'),
+            "total_findings": aggregated_results.get('total_findings'),
+            "findings_by_severity": aggregated_results.get('findings_by_severity', {}),
+            "findings": aggregated_results.get('findings', []),
+            "cves": aggregated_results.get('cves', []),
+            "execution_time": aggregated_results.get('execution_time', 0),
+            "tools_used": aggregated_results.get('tools_used', []),
+            "stats": aggregated_results.get('stats', {})
+        }
+        
+        # Include deduplication statistics if available
+        if 'deduplication_stats' in aggregated_results:
+            export_data["deduplication_stats"] = aggregated_results.get('deduplication_stats')
+        
+        return json.dumps(export_data, indent=2)
     
     def export_to_markdown(self, aggregated_results: Dict) -> str:
         """
@@ -98,6 +201,15 @@ class ResultAggregator:
         markdown += f"**Scan Date**: {aggregated_results.get('timestamp')}\n"
         markdown += f"**Total Findings**: {aggregated_results.get('total_findings')}\n\n"
         
+        # Add deduplication stats if available
+        if 'deduplication_stats' in aggregated_results:
+            stats = aggregated_results.get('deduplication_stats')
+            markdown += "## Deduplication Statistics\n\n"
+            markdown += f"- **Raw Findings**: {stats.get('total_raw_findings', 0)}\n"
+            markdown += f"- **Unique Findings**: {aggregated_results.get('total_findings', 0)}\n"
+            markdown += f"- **Duplicates Removed**: {stats.get('duplicates_removed', 0)}\n"
+            markdown += f"- **Deduplication Ratio**: {stats.get('deduplication_ratio', 0)}%\n\n"
+        
         # Add severity summary
         markdown += "## Summary by Severity\n\n"
         for severity, count in aggregated_results.get('findings_by_severity', {}).items():
@@ -114,13 +226,20 @@ class ResultAggregator:
                 markdown += f"**CVE ID**: {finding.get('cve_id')}\n"
                 
             markdown += f"**Location**: {finding.get('location')}\n"
-            markdown += f"**Source Tool**: {finding.get('source_tool')}\n"
+            
+            if 'source_tool' in finding:
+                markdown += f"**Source Tool**: {finding.get('source_tool')}\n"
+            elif 'source_tools' in finding:
+                markdown += f"**Source Tools**: {', '.join(finding.get('source_tools'))}\n"
             
             if 'evidence' in finding:
                 markdown += f"**Evidence**:\n```\n{finding.get('evidence')}\n```\n"
                 
             if 'mitigation' in finding:
                 markdown += f"**Mitigation**: {finding.get('mitigation')}\n"
+            
+            if 'related_ids' in finding and finding.get('related_ids'):
+                markdown += f"**Related IDs**: {', '.join(finding.get('related_ids'))}\n"
                 
             markdown += "\n"
         
@@ -137,77 +256,82 @@ class ResultAggregator:
             
         return markdown
     
-    def _deduplicate_findings(self, findings: List[Dict]) -> List[Dict]:
+    def _deduplicate_findings(self, findings: List[Dict]) -> tuple:
         """
-        Deduplicate findings based on similarity.
+        Deduplicate findings based on key attributes.
         
         Args:
-            findings: List of findings from all tools
+            findings: List of findings to deduplicate
             
         Returns:
-            List of deduplicated findings
+            List of deduplicated findings and info about duplicates
         """
-        # Simplified deduplication based on finding name and location
-        # In a real implementation, this would use more sophisticated comparison
+        unique_findings = []
+        seen_fingerprints = set()
+        duplicates_by_fingerprint = defaultdict(list)
         
-        # Group findings by name
-        findings_by_name = {}
+        logger.info(f"Deduplicating findings: {len(findings)} total raw findings")
+        
         for finding in findings:
-            name = finding.get('name', '').lower()
+            # Generate a fingerprint for the finding
+            fingerprint = self._generate_finding_fingerprint(finding)
             
-            if name not in findings_by_name:
-                findings_by_name[name] = []
-                
-            findings_by_name[name].append(finding)
-        
-        # For each group, deduplicate by comparing locations
-        deduplicated = []
-        for name, group in findings_by_name.items():
-            # If only one finding with this name, add it directly
-            if len(group) == 1:
-                deduplicated.append(group[0])
+            if fingerprint in seen_fingerprints:
+                # This is a duplicate
+                duplicates_by_fingerprint[fingerprint].append(finding)
                 continue
             
-            # Group by location
-            by_location = {}
-            for finding in group:
-                location = finding.get('location', '')
-                
-                if location not in by_location:
-                    by_location[location] = []
-                    
-                by_location[location].append(finding)
-            
-            # For each location, take the finding with the highest severity
-            for location, loc_findings in by_location.items():
-                # Sort by severity (Critical > High > Medium > Low > Info)
-                severity_order = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
-                sorted_findings = sorted(
-                    loc_findings, 
-                    key=lambda x: severity_order.get(x.get('severity', '').lower(), 0),
-                    reverse=True
-                )
-                
-                # Take the highest severity finding and merge any additional information
-                merged = sorted_findings[0].copy()
-                
-                # Merge evidence and source tools
-                evidence = set()
-                source_tools = set()
-                for f in sorted_findings:
-                    if 'evidence' in f:
-                        evidence.add(f['evidence'])
-                    if 'source_tool' in f:
-                        source_tools.add(f['source_tool'])
-                
-                if evidence:
-                    merged['evidence'] = ' | '.join(evidence)
-                if source_tools:
-                    merged['source_tools'] = list(source_tools)
-                    
-                deduplicated.append(merged)
+            # New unique finding
+            seen_fingerprints.add(fingerprint)
+            unique_findings.append(finding)
         
-        return deduplicated
+        # Count total duplicates and groups
+        total_duplicates = len(findings) - len(unique_findings)
+        duplicate_groups = len([fp for fp, dups in duplicates_by_fingerprint.items() if dups])
+        
+        # Log deduplication results
+        logger.info(f"Deduplication complete: {len(unique_findings)} unique findings, {total_duplicates} duplicates removed")
+        logger.info(f"Found {duplicate_groups} groups of duplicate findings")
+        
+        # Log details about each duplicate group
+        for fingerprint, dups in duplicates_by_fingerprint.items():
+            if dups:
+                sample = dups[0]
+                logger.debug(f"Duplicate group: {len(dups) + 1} instances of '{sample.get('name')}' severity: {sample.get('severity')}, location: {sample.get('location')}")
+        
+        duplicates_info = {
+            "total_duplicates": total_duplicates,
+            "duplicate_groups": duplicate_groups,
+            "duplicates_by_fingerprint": {k: len(v) for k, v in duplicates_by_fingerprint.items()}
+        }
+        
+        return unique_findings, duplicates_info
+    
+    def _generate_finding_fingerprint(self, finding: Dict) -> str:
+        """
+        Generate a unique fingerprint for a finding based on its attributes.
+        
+        Args:
+            finding: The finding dictionary
+            
+        Returns:
+            A string fingerprint
+        """
+        # Extract key attributes for fingerprinting
+        # Use a combination of attributes that uniquely identify a finding
+        key_attrs = {
+            "name": finding.get("name", ""),
+            "location": finding.get("location", ""),
+            "description": finding.get("description", ""),
+            "severity": finding.get("severity", ""),
+            # Don't use tool name as we want to deduplicate across tools
+        }
+        
+        # Generate a stable representation of the key attributes
+        fingerprint_data = json.dumps(key_attrs, sort_keys=True).encode('utf-8')
+        
+        # Create a hash of the data
+        return hashlib.md5(fingerprint_data).hexdigest()
     
     def _map_findings_to_cves(self, findings: List[Dict], cve_info: Dict) -> List[Dict]:
         """

@@ -4,13 +4,15 @@ A Security AI Agent for automating vulnerability assessments for websites and sm
 
 ## Features
 
-- **Input Handling**: Accepts website URLs or Solidity smart contract code/repositories
+- **Input Handling**: Accepts website URLs, Solidity smart contract code/repositories, or multiple files
 - **CVE Knowledge Base**: Queries for known CVEs related to the target
 - **Tool Selection**: Dynamically selects appropriate security tools based on the target type
 - **Scan Execution**: Executes selected security tools against the target
 - **Result Aggregation**: Merges and deduplicates results from multiple tools
 - **Summary Generation**: Produces human-readable reports with remediation suggestions
 - **Detailed Logging**: View comprehensive logs of tool execution and scan results
+- **Multiple File Scanning**: Scan multiple files or entire directories at once
+- **GitHub Repository Support**: Directly scan code from GitHub repositories
 
 ## Project Structure
 
@@ -163,6 +165,18 @@ The main entry point provides several commands:
 # Run a security scan on a website or Solidity contract
 python main.py scan <target> [--format json|markdown] [--output-file results.json]
 
+# Scan multiple files/URLs at once
+python main.py scan file1.sol file2.sol file3.sol [--output-file results.json]
+
+# Scan a directory recursively
+python main.py scan src/ --recursive [--output-file results.json]
+
+# Scan a GitHub repository
+python main.py scan https://github.com/username/repository --repo [--output-file results.json]
+
+# Scan a private GitHub repository (requires authentication)
+python main.py scan https://github.com/username/repository --repo --token YOUR_GITHUB_TOKEN
+
 # Load CVE data into the knowledge base
 python main.py load-cve [--id CVE-ID] [--keyword search_term] [--smart-contracts]
 
@@ -175,11 +189,83 @@ python main.py run <url> [--sample-data]
 A friendly demo interface is provided for easy usage:
 
 ```
-# Basic usage
+# Basic usage - single target
 python demo.py <target> [--output results.json] [--format json|markdown]
+
+# Scan multiple files
+python demo.py file1.sol file2.sol file3.sol [--output results.json]
+
+# Scan a directory recursively
+python demo.py src/ --recursive [--output results.json]
+
+# Scan a GitHub repository
+python demo.py --repo https://github.com/username/repository [--output results.json]
 
 # With verbose logging enabled
 python demo.py <target> --verbose
+```
+
+#### Multiple File Scanning
+
+When scanning multiple files or repositories, the tool will:
+
+1. Analyze each file individually
+2. Aggregate findings across all files
+3. Generate a comprehensive report that includes:
+   - Per-file vulnerability counts
+   - Overall severity summary
+   - Consolidated remediation suggestions
+
+Example scanning multiple files:
+```
+python demo.py contract1.sol contract2.sol --output results.json
+```
+
+#### GitHub Repository Scanning
+
+Scan entire GitHub repositories by providing the repository URL:
+
+```
+python demo.py --repo https://github.com/username/repository
+```
+
+The agent will:
+1. Access the repository through the GitHub API
+2. Analyze all relevant files (Solidity contracts, web files, etc.)
+3. Generate a comprehensive security report
+4. Clean up temporary files automatically
+
+For private repositories, you'll need to provide a GitHub access token:
+
+```
+python demo.py --repo https://github.com/username/repository --token YOUR_GITHUB_TOKEN
+```
+
+##### Handling GitHub API Rate Limits
+
+When scanning large repositories, you may encounter GitHub API rate limits. The tool has been designed to:
+- Process files in small batches
+- Implement smart retries with exponential backoff
+- Return partial results when possible
+
+To avoid rate limiting issues:
+- **Use a GitHub token** - Authenticated requests have higher rate limits
+- **Scan smaller repositories** - Repositories with fewer files are less likely to hit limits
+- **Avoid scanning multiple repositories in quick succession**
+
+If a rate limit is hit, the tool will:
+- Complete the scan with the files already downloaded
+- Show a warning about the incomplete results
+- Provide instructions for getting more complete results
+
+You can [create a GitHub personal access token](https://github.com/settings/tokens) with `repo` scope to access private repositories and increase rate limits.
+
+#### Recursive Directory Scanning
+
+Scan all files in a directory structure:
+
+```
+python demo.py --recursive ./src
 ```
 
 #### Verbose Mode

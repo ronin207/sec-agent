@@ -6,7 +6,8 @@ import time
 import random
 import json
 import uuid
-from typing import Dict, List, Optional, Any
+import os
+from typing import Dict, List, Optional, Any, Union
 import subprocess
 from datetime import datetime
 
@@ -26,13 +27,13 @@ class ScanExecutor:
     def __init__(self):
         pass
     
-    def execute_scans(self, input_data: Dict, selected_tools: Dict) -> Dict:
+    def execute_scans(self, input_data: Dict, selected_tools: Union[Dict, List]) -> Dict:
         """
         Execute security scans using the selected tools.
         
         Args:
             input_data: Dictionary containing input type and value
-            selected_tools: Dictionary containing selected tools and their configuration
+            selected_tools: List or Dictionary containing selected tools
             
         Returns:
             Dictionary containing scan results
@@ -42,58 +43,131 @@ class ScanExecutor:
         # Get the input type and value
         input_type = input_data.get('type')
         input_value = input_data.get('input')
+        is_multiple = input_data.get('is_multiple', False)
         
         # Initialize results
+        scan_id = str(uuid.uuid4())
         scan_results = {
-            "scan_id": str(uuid.uuid4()),
+            "scan_id": scan_id,
             "timestamp": datetime.now().isoformat(),
             "target": input_value,
             "input_type": input_type,
+            "is_multiple": is_multiple,
             "tool_results": [],
             "execution_time": 0
         }
         
+        # If we're dealing with multiple files
+        if is_multiple and input_data.get('files'):
+            scan_results["files"] = input_data.get('files')
+            logger.info(f"Processing multiple files: {len(input_data.get('files'))} files to scan")
+        
         # Track execution time
         start_time = time.time()
         
+        # Handle both list and dictionary formats from tool selector
+        tools_to_execute = []
+        if isinstance(selected_tools, list):
+            tools_to_execute = selected_tools
+        elif isinstance(selected_tools, dict) and 'selected_tools' in selected_tools:
+            tools_to_execute = selected_tools.get('selected_tools', [])
+        else:
+            logger.warning(f"Unexpected format for selected_tools: {type(selected_tools)}")
+            tools_to_execute = []
+        
         # Execute the selected tools
-        for tool in selected_tools.get('selected_tools', []):
+        for tool in tools_to_execute:
             try:
                 logger.info(f"Executing tool: {tool.get('name')}")
                 
-                # In a real implementation, this would execute the actual tool
-                # For demo purposes, we'll simulate tool execution
-                tool_result = self._simulate_tool_execution(tool, input_type, input_value)
-                
-                # Log detailed tool execution results
-                logger.debug(f"Tool execution details for {tool.get('name')}:")
-                logger.debug(f"Command executed: {tool.get('command').format(target=input_value)}")
-                logger.debug(f"Execution time: {tool_result.get('execution_time'):.2f} seconds")
-                logger.debug(f"Status: {tool_result.get('status')}")
-                logger.debug(f"Number of findings: {len(tool_result.get('findings', []))}")
-                logger.debug(f"Raw output sample: {tool_result.get('raw_output')[:200]}...")
-                
-                # Log each finding in detail
-                for i, finding in enumerate(tool_result.get('findings', []), 1):
-                    logger.debug(f"Finding {i} from {tool.get('name')}:")
-                    logger.debug(f"  ID: {finding.get('id')}")
-                    logger.debug(f"  Name: {finding.get('name')}")
-                    logger.debug(f"  Severity: {finding.get('severity')}")
-                    logger.debug(f"  Description: {finding.get('description')}")
-                    logger.debug(f"  Location: {finding.get('location')}")
-                
-                scan_results['tool_results'].append({
-                    "tool_id": tool.get('id'),
-                    "tool_name": tool.get('name'),
-                    "command_executed": tool.get('command').format(target=input_value),
-                    "execution_time": tool_result.get("execution_time"),
-                    "status": tool_result.get("status"),
-                    "findings": tool_result.get("findings"),
-                    "raw_output": tool_result.get("raw_output")
-                })
-                
-                # Add a delay to simulate processing time
-                time.sleep(0.5)
+                # If we're dealing with multiple files, we need to scan each one
+                if is_multiple and input_data.get('files'):
+                    combined_tool_result = {
+                        "tool_id": tool.get('id'),
+                        "tool_name": tool.get('name'),
+                        "status": "success",
+                        "execution_time": 0,
+                        "findings": [],
+                        "raw_output": "",
+                        "file_results": []
+                    }
+                    
+                    for file_path in input_data.get('files'):
+                        file_relative_path = os.path.basename(file_path)
+                        logger.info(f"Scanning file: {file_relative_path}")
+                        
+                        # In a real implementation, this would execute the actual tool on each file
+                        # For demo purposes, we'll simulate tool execution
+                        tool_result = self._simulate_tool_execution(tool, input_type, file_path)
+                        
+                        # Log detailed tool execution results for this file
+                        logger.debug(f"Tool execution details for {tool.get('name')} on {file_relative_path}:")
+                        logger.debug(f"Command executed: {tool.get('command').format(target=file_path)}")
+                        logger.debug(f"Execution time: {tool_result.get('execution_time'):.2f} seconds")
+                        logger.debug(f"Status: {tool_result.get('status')}")
+                        logger.debug(f"Number of findings (pre-deduplication): {len(tool_result.get('findings', []))}")
+                        
+                        # Add file-specific results
+                        file_result = {
+                            "file": file_path,
+                            "findings": tool_result.get("findings", []),
+                            "execution_time": tool_result.get("execution_time", 0),
+                            "status": tool_result.get("status", "unknown")
+                        }
+                        combined_tool_result["file_results"].append(file_result)
+                        
+                        # Aggregate findings from this file
+                        for finding in tool_result.get('findings', []):
+                            # Add file information to the finding
+                            finding['file'] = file_path
+                            combined_tool_result['findings'].append(finding)
+                        
+                        # Combine execution time
+                        combined_tool_result['execution_time'] += tool_result.get('execution_time', 0)
+                        
+                        # Append raw output with file header
+                        combined_tool_result['raw_output'] += f"\n\n=== Results for {file_path} ===\n"
+                        combined_tool_result['raw_output'] += tool_result.get('raw_output', '')
+                        
+                        # Add a delay to simulate processing time
+                        time.sleep(0.1)
+                    
+                    # Add the combined results to scan_results
+                    scan_results['tool_results'].append(combined_tool_result)
+                    
+                else:
+                    # Regular single target scan
+                    tool_result = self._simulate_tool_execution(tool, input_type, input_value)
+                    
+                    # Log detailed tool execution results
+                    logger.debug(f"Tool execution details for {tool.get('name')}:")
+                    logger.debug(f"Command executed: {tool.get('command').format(target=input_value)}")
+                    logger.debug(f"Execution time: {tool_result.get('execution_time'):.2f} seconds")
+                    logger.debug(f"Status: {tool_result.get('status')}")
+                    logger.debug(f"Number of findings (pre-deduplication): {len(tool_result.get('findings', []))}")
+                    logger.debug(f"Raw output sample: {tool_result.get('raw_output')[:200]}...")
+                    
+                    # Log each finding in detail
+                    for i, finding in enumerate(tool_result.get('findings', []), 1):
+                        logger.debug(f"Finding {i} from {tool.get('name')} (raw, pre-deduplication):")
+                        logger.debug(f"  ID: {finding.get('id')}")
+                        logger.debug(f"  Name: {finding.get('name')}")
+                        logger.debug(f"  Severity: {finding.get('severity')}")
+                        logger.debug(f"  Description: {finding.get('description')}")
+                        logger.debug(f"  Location: {finding.get('location')}")
+                    
+                    scan_results['tool_results'].append({
+                        "tool_id": tool.get('id'),
+                        "tool_name": tool.get('name'),
+                        "command_executed": tool.get('command').format(target=input_value),
+                        "execution_time": tool_result.get("execution_time"),
+                        "status": tool_result.get("status"),
+                        "findings": tool_result.get("findings"),
+                        "raw_output": tool_result.get("raw_output")
+                    })
+                    
+                    # Add a delay to simulate processing time
+                    time.sleep(0.5)
                 
             except Exception as e:
                 logger.error(f"Error executing tool {tool.get('name')}: {str(e)}")
@@ -198,7 +272,7 @@ class ScanExecutor:
             elif tool_id == 'solhint':
                 return self._mock_solhint_results(target, execution_time)
             elif tool_id == 'mythril':
-                return self._mock_mythril_results(target, execution_time)
+                return self._mock_mythril_results(input_type, target)
             elif tool_id == 'manticore':
                 return self._mock_manticore_results(target, execution_time)
         
@@ -572,62 +646,127 @@ TokenContract.sol
             "raw_output": raw_output
         }
     
-    def _mock_mythril_results(self, target: str, execution_time: float) -> Dict:
-        """Mock Mythril scanning results"""
-        findings = [
-            {
-                "id": "mythril-dos-1",
-                "name": "DoS With Failed Call",
-                "severity": "Medium",
-                "description": "External call in loop could lead to denial of service",
-                "location": "TokenContract.sol:67-72",
-                "evidence": "Loop containing external calls"
-            },
-            {
-                "id": "mythril-integer-1",
-                "name": "Integer Overflow",
-                "severity": "High",
-                "description": "Integer overflow in addition operation",
-                "location": "TokenContract.sol:89",
-                "evidence": "a + b where a and b can be controlled by an attacker"
-            }
-        ]
+    def _mock_mythril_results(self, input_type, input_value):
+        """
+        Generate mock Mythril scan results.
         
-        raw_output = """
-==== Denial Of Service ====
+        Args:
+            input_type: Type of input (solidity_contract, etc.)
+            input_value: Input value to scan
+            
+        Returns:
+            Dictionary with mock scan results
+        """
+        # Generate a UUID for the scan
+        scan_id = str(uuid.uuid4())
+        
+        # Start with basic finding template
+        findings = []
+        
+        if input_type == 'solidity_contract':
+            # Get filename without path
+            filename = os.path.basename(input_value)
+            
+            # Generate various mock findings for Solidity contracts
+            findings = [
+                {
+                    "id": "mythril-dos-1",
+                    "name": "DoS With Failed Call",
+                    "severity": "Medium",
+                    "description": "External call in loop could lead to denial of service",
+                    "location": f"{filename}:67-72",
+                    "evidence": "Loop containing external calls"
+                },
+                {
+                    "id": "mythril-integer-1",
+                    "name": "Integer Overflow",
+                    "severity": "High",
+                    "description": "Integer overflow in addition operation",
+                    "location": f"{filename}:89",
+                    "evidence": "a + b where a and b can be controlled by an attacker"
+                },
+                {
+                    "id": "mythril-reentrancy-1",
+                    "name": "Reentrancy",
+                    "severity": "High",
+                    "description": "Reentrancy vulnerability in withdraw function",
+                    "location": f"{filename}:45-52",
+                    "evidence": "External call followed by state change"
+                },
+                {
+                    "id": "mythril-unchecked-send-1",
+                    "name": "Unchecked Send",
+                    "severity": "Medium",
+                    "description": "Return value of external call not checked",
+                    "location": f"{filename}:112",
+                    "evidence": "External call without checking return value"
+                }
+            ]
+            
+            # Simulate heavy duplication for testing
+            # Duplicate the findings 50 times each to create a lot of noise
+            duplicate_findings = []
+            for finding in findings:
+                for i in range(50):
+                    # Create a copy to avoid modifying the original
+                    duplicate = finding.copy()
+                    # Only modify the ID to simulate slightly different findings with same data
+                    duplicate["id"] = f"{duplicate['id']}-dup-{i}"
+                    duplicate_findings.append(duplicate)
+            
+            # Add duplicate findings to the original list
+            findings.extend(duplicate_findings)
+            
+            # To make the raw output reflect the duplication:
+            raw_output = ""
+            for finding in findings[:3]:  # Show first 3 genuine findings
+                raw_output += f"""==== {finding['name']} ====
+
 SWC ID: 113
-Severity: Medium
+
+Severity: {finding['severity']}
+
 Contract: TokenContract
-Function name: processPayments(address[])
+
+Function name: withdraw()
+
 PC address: 1337
-A denial-of-service vulnerability exists in function processPayments(). 
-External calls inside a loop might lead to a denial-of-service attack.
+
+{finding['description']}
+Location: {finding['location']}
+
 --------------------
-In file: TokenContract.sol:67
 
-for (uint i=0; i < recipients.length; i++) {
-    recipients[i].transfer(amount);
-}
-
-==== Integer Overflow ====
-SWC ID: 101
-Severity: High
-Contract: TokenContract
-Function name: add(uint256,uint256)
-PC address: 1997
-The arithmetic operation can result in integer overflow.
---------------------
-In file: TokenContract.sol:89
-
-function add(uint256 a, uint256 b) internal pure returns (uint256) {
-    uint256 c = a + b;
-    require(c >= a, "SafeMath: addition overflow");
-    return c;
-}
 """
+            
+            # Add indication of many duplicates
+            raw_output += f"\n... and {len(findings) - 3} more similar findings ...\n"
+            
+        elif input_type == 'website':
+            # Some default web vulnerabilities for Mythril (normally it's for smart contracts but for demo)
+            findings = [
+                {
+                    "id": "mythril-dos-web-1",
+                    "name": "Potential DoS",
+                    "severity": "Medium",
+                    "description": "API endpoint vulnerable to denial of service",
+                    "location": f"{input_value}/api/data",
+                    "evidence": "No rate limiting in place"
+                }
+            ]
+            raw_output = "Mythril scan complete. Found potential DoS vulnerability."
+            
+        else:
+            findings = []
+            raw_output = "Mythril scan complete. No findings."
+        
+        # Generate random execution time between 2 and 5 seconds
+        execution_time = round(random.uniform(3.5, 5.0), 2)
         
         return {
+            "scan_id": scan_id,
             "status": "success",
+            "timestamp": datetime.now().isoformat(),
             "execution_time": execution_time,
             "findings": findings,
             "raw_output": raw_output
