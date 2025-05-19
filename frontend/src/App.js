@@ -715,37 +715,13 @@ contract SecureContract {
         
         {activeTab === 'issues' && (
           <div className="tab-content">
-            {/* Severity tabs */}
-            <div className="severity-tabs">
-              <button 
-                className={`severity-tab high ${activeSeverity === 'high' ? 'active' : ''}`}
-                onClick={() => setActiveSeverity('high')}
-              >
-                High ({findingsBySeverity.high.length})
-              </button>
-              <button 
-                className={`severity-tab medium ${activeSeverity === 'medium' ? 'active' : ''}`}
-                onClick={() => setActiveSeverity('medium')}
-              >
-                Medium ({findingsBySeverity.medium.length})
-              </button>
-              <button 
-                className={`severity-tab low ${activeSeverity === 'low' ? 'active' : ''}`}
-                onClick={() => setActiveSeverity('low')}
-              >
-                Low ({findingsBySeverity.low.length})
-              </button>
-              <button 
-                className={`severity-tab info ${activeSeverity === 'info' ? 'active' : ''}`}
-                onClick={() => setActiveSeverity('info')}
-              >
-                Info ({findingsBySeverity.info.length})
-              </button>
-            </div>
-            
             {/* Display findings of the active severity */}
             {findingsBySeverity[activeSeverity].length > 0 ? (
               <div className="findings-list">
+                <h3 className="severity-heading">
+                  <span className={`severity-indicator ${activeSeverity}`}></span>
+                  {activeSeverity.charAt(0).toUpperCase() + activeSeverity.slice(1)} Severity Issues ({findingsBySeverity[activeSeverity].length})
+                </h3>
                 {findingsBySeverity[activeSeverity].map((finding, idx) => (
                   <div key={idx} className="gemini-card finding-card">
                     <div className="finding-header">
@@ -806,8 +782,18 @@ contract SecureContract {
                 ))}
               </div>
             ) : (
-              <div className="no-findings">
-                <p>No {activeSeverity} severity findings detected.</p>
+              <div className="gemini-card no-findings-card">
+                <div className="no-findings-content">
+                  <div className="info-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </div>
+                  <h4>No {activeSeverity} severity findings detected</h4>
+                  <p>Great news! No security issues were found with this severity level.</p>
+                </div>
               </div>
             )}
           </div>
