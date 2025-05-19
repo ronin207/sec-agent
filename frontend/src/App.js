@@ -850,7 +850,7 @@ contract SecureContract {
       <main className="gemini-main">
         {!results && !loading && (
           <div className="ready-message">
-            Ready when you are.
+            Hello World
           </div>
         )}
         
