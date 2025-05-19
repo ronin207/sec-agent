@@ -259,6 +259,118 @@ function App() {
   const renderFindings = () => {
     if (!results) return null;
     
+    // Helper function to get default code suggestions based on vulnerability type
+    const getDefaultSuggestion = (vulnType) => {
+      const lowerType = vulnType.toLowerCase();
+      
+      if (lowerType.includes('reentrancy')) {
+        return {
+          vulnerable: `function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    (bool success, ) = msg.sender.call{value: amount}("");
+    require(success);
+    balances[msg.sender] -= amount;
+}`,
+          fixed: `function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    balances[msg.sender] -= amount; // Update state before external call
+    (bool success, ) = msg.sender.call{value: amount}("");
+    require(success);
+}`
+        };
+      } 
+      else if (lowerType.includes('integer overflow') || lowerType.includes('underflow')) {
+        return {
+          vulnerable: `function add(uint256 a, uint256 b) public pure returns (uint256) {
+    return a + b; // Can overflow
+}`,
+          fixed: `// Option 1: Manual check
+function add(uint256 a, uint256 b) public pure returns (uint256) {
+    uint256 c = a + b;
+    require(c >= a, "Addition overflow");
+    return c;
+}
+
+// Option 2: SafeMath library (Solidity < 0.8.0)
+using SafeMath for uint256;
+function add(uint256 a, uint256 b) public pure returns (uint256) {
+    return a.add(b);
+}
+
+// Option 3: Use built-in overflow checks (Solidity >= 0.8.0)`
+        };
+      }
+      else if (lowerType.includes('unchecked') && (lowerType.includes('send') || lowerType.includes('call'))) {
+        return {
+          vulnerable: `function sendFunds(address payable recipient, uint256 amount) public {
+    recipient.send(amount); // Return value not checked
+}`,
+          fixed: `function sendFunds(address payable recipient, uint256 amount) public {
+    bool success = recipient.send(amount);
+    require(success, "Transfer failed");
+}
+
+// Or use transfer() which automatically reverts on failure
+function sendFunds(address payable recipient, uint256 amount) public {
+    recipient.transfer(amount);
+}`
+        };
+      }
+      else if (lowerType.includes('dos')) {
+        return {
+          vulnerable: `function distribute(address[] memory recipients) public {
+    for(uint i = 0; i < recipients.length; i++) {
+        recipients[i].transfer(1 ether); // Will revert entire tx if one transfer fails
+    }
+}`,
+          fixed: `function distribute(address[] memory recipients) public {
+    for(uint i = 0; i < recipients.length; i++) {
+        (bool success, ) = recipients[i].call{value: 1 ether}("");
+        // Log failure but continue execution
+        if (!success) {
+            emit TransferFailed(recipients[i]);
+        }
+    }
+}`
+        };
+      }
+      else if (lowerType.includes('visibility')) {
+        return {
+          vulnerable: `function initializeContract(address _owner) {
+    owner = _owner; // Missing visibility modifier (public by default)
+}`,
+          fixed: `function initializeContract(address _owner) private {
+    owner = _owner;
+}
+
+// Or
+function initializeContract(address _owner) internal {
+    owner = _owner;
+}`
+        };
+      }
+      else if (lowerType.includes('compiler')) {
+        return {
+          vulnerable: `pragma solidity ^0.4.25;
+
+contract VulnerableContract {
+    // Vulnerable to older compiler bugs
+}`,
+          fixed: `pragma solidity ^0.8.20;
+
+contract SecureContract {
+    // Uses latest compiler with security improvements
+}`
+        };
+      }
+      
+      // Default suggestion if no specific pattern matched
+      return {
+        vulnerable: "// Vulnerable code with security issues",
+        fixed: "// Improved code implementing security best practices"
+      };
+    };
+    
     const findingsBySeverity = {
       high: [],
       medium: [],
@@ -556,7 +668,8 @@ function App() {
                         
                         // Generate a code suggestion based on vulnerability type if not already provided
                         if (!suggestion) {
-                          suggestion = getDefaultSuggestion(vulnType);
+                          const suggestionData = getDefaultSuggestion(vulnType);
+                          suggestion = suggestionData.vulnerable;
                         }
                         
                         // Create or add to grouped findings
@@ -572,115 +685,6 @@ function App() {
                           groupedFindings[vulnType].locations.push(location);
                         }
                       });
-                      
-                      // Helper function to get default code suggestions based on vulnerability type
-                      function getDefaultSuggestion(vulnType) {
-                        const lowerType = vulnType.toLowerCase();
-                        
-                        if (lowerType.includes('reentrancy')) {
-                          return `// Vulnerable code
-function withdraw(uint amount) public {
-    require(balances[msg.sender] >= amount);
-    (bool success, ) = msg.sender.call{value: amount}("");
-    require(success);
-    balances[msg.sender] -= amount;
-}
-
-// Suggested fix
-function withdraw(uint amount) public {
-    require(balances[msg.sender] >= amount);
-    balances[msg.sender] -= amount; // Update state before external call
-    (bool success, ) = msg.sender.call{value: amount}("");
-    require(success);
-}`;
-                        } 
-                        else if (lowerType.includes('integer overflow') || lowerType.includes('underflow')) {
-                          return `// Vulnerable code
-function add(uint256 a, uint256 b) public pure returns (uint256) {
-    return a + b; // Can overflow
-}
-
-// Suggested fix
-function add(uint256 a, uint256 b) public pure returns (uint256) {
-    uint256 c = a + b;
-    require(c >= a, "Addition overflow");
-    return c;
-}
-
-// Or use SafeMath library (Solidity < 0.8.0)
-using SafeMath for uint256;
-function add(uint256 a, uint256 b) public pure returns (uint256) {
-    return a.add(b);
-}
-
-// Or use built-in overflow checks (Solidity >= 0.8.0)`;
-                        }
-                        else if (lowerType.includes('unchecked') && (lowerType.includes('send') || lowerType.includes('call'))) {
-                          return `// Vulnerable code
-function sendFunds(address payable recipient, uint256 amount) public {
-    recipient.send(amount); // Return value not checked
-}
-
-// Suggested fix
-function sendFunds(address payable recipient, uint256 amount) public {
-    bool success = recipient.send(amount);
-    require(success, "Transfer failed");
-}
-
-// Or use transfer() which automatically reverts on failure
-function sendFunds(address payable recipient, uint256 amount) public {
-    recipient.transfer(amount);
-}`;
-                        }
-                        else if (lowerType.includes('dos')) {
-                          return `// Vulnerable code
-function distribute(address[] memory recipients) public {
-    for(uint i = 0; i < recipients.length; i++) {
-        recipients[i].transfer(1 ether); // Will revert entire tx if one transfer fails
-    }
-}
-
-// Suggested fix
-function distribute(address[] memory recipients) public {
-    for(uint i = 0; i < recipients.length; i++) {
-        (bool success, ) = recipients[i].call{value: 1 ether}("");
-        // Log failure but continue execution
-        if (!success) {
-            emit TransferFailed(recipients[i]);
-        }
-    }
-}`;
-                        }
-                        else if (lowerType.includes('visibility')) {
-                          return `// Vulnerable code
-function initializeContract(address _owner) {
-    owner = _owner; // Missing visibility modifier (public by default)
-}
-
-// Suggested fix
-function initializeContract(address _owner) private {
-    owner = _owner;
-}
-
-// Or
-function initializeContract(address _owner) internal {
-    owner = _owner;
-}`;
-                        }
-                        else if (lowerType.includes('compiler')) {
-                          return `// Update your pragma statement
-// From
-pragma solidity ^0.4.25;
-
-// To a more recent version
-pragma solidity ^0.8.20;
-
-// Then adjust your code to be compatible with the newer compiler version`;
-                        }
-                        
-                        // Default suggestion if no specific pattern matched
-                        return "// Review the vulnerable code and implement security best practices";
-                      }
                       
                       // Render grouped findings
                       return (
@@ -698,9 +702,46 @@ pragma solidity ^0.8.20;
                               {data.suggestion && (
                                 <div className="code-suggestion">
                                   <h6>Code Suggestion</h6>
-                                  <pre className="code-block">
-                                    <code>{data.suggestion}</code>
-                                  </pre>
+                                  
+                                  <div className="code-sections">
+                                    <div className="code-section vulnerable">
+                                      <div className="code-header">
+                                        <span className="section-title">Vulnerable Code</span>
+                                        <button 
+                                          className="copy-btn" 
+                                          onClick={() => navigator.clipboard.writeText(
+                                            typeof data.suggestion === 'string' 
+                                              ? data.suggestion 
+                                              : data.suggestion.vulnerable || ''
+                                          )}
+                                        >
+                                          Copy
+                                        </button>
+                                      </div>
+                                      <div className="code-content">
+                                        {typeof data.suggestion === 'string' 
+                                          ? data.suggestion 
+                                          : data.suggestion.vulnerable || ''}
+                                      </div>
+                                    </div>
+                                    
+                                    {typeof data.suggestion !== 'string' && data.suggestion.fixed && (
+                                      <div className="code-section fixed">
+                                        <div className="code-header">
+                                          <span className="section-title">Suggested Fix</span>
+                                          <button 
+                                            className="copy-btn" 
+                                            onClick={() => navigator.clipboard.writeText(data.suggestion.fixed)}
+                                          >
+                                            Copy
+                                          </button>
+                                        </div>
+                                        <div className="code-content">
+                                          {data.suggestion.fixed}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </li>
@@ -767,6 +808,43 @@ pragma solidity ^0.8.20;
                         <strong>Recommendation:</strong> {finding.recommendation}
                       </div>
                     )}
+                    
+                    {/* Add code suggestion */}
+                    <div className="code-suggestion">
+                      <h6>Code Suggestion</h6>
+                      
+                      <div className="code-sections">
+                        <div className="code-section vulnerable">
+                          <div className="code-header">
+                            <span className="section-title">Vulnerable Code</span>
+                            <button 
+                              className="copy-btn" 
+                              onClick={() => navigator.clipboard.writeText(getDefaultSuggestion(finding.name || '').vulnerable)}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <div className="code-content">
+                            {getDefaultSuggestion(finding.name || '').vulnerable}
+                          </div>
+                        </div>
+                        
+                        <div className="code-section fixed">
+                          <div className="code-header">
+                            <span className="section-title">Suggested Fix</span>
+                            <button 
+                              className="copy-btn" 
+                              onClick={() => navigator.clipboard.writeText(getDefaultSuggestion(finding.name || '').fixed)}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <div className="code-content">
+                            {getDefaultSuggestion(finding.name || '').fixed}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

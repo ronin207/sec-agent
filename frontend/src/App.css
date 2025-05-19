@@ -818,67 +818,112 @@ body {
   color: #666;
 }
 
+/* Code suggestion styling */
 .code-suggestion {
-  margin: 0.75rem 0 1.5rem;
+  margin-top: 15px;
+  border-top: 1px solid #3c3f44;
+  padding-top: 10px;
 }
 
 .code-suggestion h6 {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #444;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #bbc6ce;
 }
 
-.code-block {
-  background-color: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 1rem;
+.code-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.code-section {
+  display: flex;
+  flex-direction: column;
+  background-color: #1a1d21;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #32363c;
+  margin-bottom: 10px;
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #252830;
+  border-bottom: 1px solid #32363c;
+  position: relative;
+  z-index: 2;
+}
+
+.code-content {
+  background-color: #1e2127;
+  padding: 12px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  white-space: pre;
+  color: #dcdfe4;
   max-height: 300px;
   overflow-y: auto;
-  font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  margin: 0;
 }
 
-.code-block code {
-  display: block;
+.code-section.vulnerable {
+  border-left: 3px solid #ea4335;
 }
 
-/* Syntax highlighting colors */
-.code-block .comment, .code-block .comment-content {
-  color: #6A9955;
+.code-section.fixed {
+  border-left: 3px solid #34a853;
 }
 
-.code-block .keyword {
-  color: #569CD6;
+.section-title {
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.code-block .function {
-  color: #DCDCAA;
+.section-title.vulnerable {
+  color: #ea4335;
 }
 
-.code-block .variable {
-  color: #9CDCFE;
+.section-title.fixed {
+  color: #34a853;
 }
 
-.code-block .string {
-  color: #CE9178;
+.copy-btn {
+  background-color: #32363c;
+  color: #dcdfe4;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
-.code-block .number {
-  color: #B5CEA8;
+.copy-btn:hover {
+  background-color: #3f434a;
 }
 
-/* Dark mode for code blocks */
-@media (prefers-color-scheme: dark) {
+/* Syntax highlighting classes */
+.code-block .keyword { color: #c678dd; }
+.code-block .function { color: #61afef; }
+.code-block .comment { color: #5c6370; }
+.code-block .string { color: #98c379; }
+.code-block .number { color: #d19a66; }
+
+/* Make finding cards expandable on smaller screens */
+@media (max-width: 768px) {
+  .finding-card {
+    max-height: none;
+    overflow: visible;
+  }
+  
   .code-block {
-    background-color: #1E1E1E;
-    border-color: #333;
-    color: #D4D4D4;
+    max-height: 200px;
   }
 }
 
