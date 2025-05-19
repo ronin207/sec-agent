@@ -599,19 +599,16 @@ contract SecureContract {
                       results.summary.technical_findings.forEach(finding => {
                         // Extract base text from different formats
                         let text = '';
-                        let suggestion = '';
                         
                         if (typeof finding === 'string') {
                           text = finding;
                           // Try to extract suggestion if in format "vulnerability: description => suggestion"
                           const suggestionMatch = text.match(/=>(.+)$/);
                           if (suggestionMatch) {
-                            suggestion = suggestionMatch[1].trim();
                             text = text.replace(/=>(.+)$/, '').trim();
                           }
                         } else if (typeof finding === 'object') {
                           text = finding.name || finding.description || JSON.stringify(finding);
-                          suggestion = finding.recommendation || finding.remediation || finding.suggestion || '';
                         }
                         
                         // Extract vulnerability type using various patterns
@@ -666,18 +663,11 @@ contract SecureContract {
                           }
                         }
                         
-                        // Generate a code suggestion based on vulnerability type if not already provided
-                        if (!suggestion) {
-                          const suggestionData = getDefaultSuggestion(vulnType);
-                          suggestion = suggestionData.vulnerable;
-                        }
-                        
                         // Create or add to grouped findings
                         if (!groupedFindings[vulnType]) {
                           groupedFindings[vulnType] = {
                             description: text,
-                            locations: [],
-                            suggestion: suggestion
+                            locations: []
                           };
                         }
                         
@@ -698,52 +688,6 @@ contract SecureContract {
                                 </ul>
                               )}
                               <p className="finding-description">{data.description}</p>
-                              
-                              {data.suggestion && (
-                                <div className="code-suggestion">
-                                  <h6>Code Suggestion</h6>
-                                  
-                                  <div className="code-sections">
-                                    <div className="code-section vulnerable">
-                                      <div className="code-header">
-                                        <span className="section-title">Vulnerable Code</span>
-                                        <button 
-                                          className="copy-btn" 
-                                          onClick={() => navigator.clipboard.writeText(
-                                            typeof data.suggestion === 'string' 
-                                              ? data.suggestion 
-                                              : data.suggestion.vulnerable || ''
-                                          )}
-                                        >
-                                          Copy
-                                        </button>
-                                      </div>
-                                      <div className="code-content">
-                                        {typeof data.suggestion === 'string' 
-                                          ? data.suggestion 
-                                          : data.suggestion.vulnerable || ''}
-                                      </div>
-                                    </div>
-                                    
-                                    {typeof data.suggestion !== 'string' && data.suggestion.fixed && (
-                                      <div className="code-section fixed">
-                                        <div className="code-header">
-                                          <span className="section-title">Suggested Fix</span>
-                                          <button 
-                                            className="copy-btn" 
-                                            onClick={() => navigator.clipboard.writeText(data.suggestion.fixed)}
-                                          >
-                                            Copy
-                                          </button>
-                                        </div>
-                                        <div className="code-content">
-                                          {data.suggestion.fixed}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
                             </li>
                           ))}
                         </ul>
