@@ -912,39 +912,59 @@ contract SecureContract {
             
             <form onSubmit={handleSubmit}>
               {inputType === 'url' ? (
-                <div className="gemini-input-container">
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Enter GitHub repository URL"
-                    className="gemini-input"
-                  />
+                <div className="gemini-card input-card">
+                  <div className="url-input-container">
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://github.com/username/repository"
+                      className="modern-input"
+                      aria-label="GitHub repository URL"
+                    />
+                    <button 
+                      type="submit" 
+                      className="arrow-submit-btn"
+                      disabled={loading || !url}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 19V5M5 12l7-7 7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                  
                   {url.includes('github.com') && (
-                    <div className="github-token-input">
-                      <label htmlFor="github-token">GitHub Token (Optional):</label>
-                      <input
-                        type="password"
-                        id="github-token"
-                        value={githubToken}
-                        onChange={(e) => {
-                          setGithubToken(e.target.value);
-                          setTokenSaved(false);
-                        }}
-                        placeholder="GitHub personal access token for API access"
-                      />
-                      {tokenSaved && <span className="token-status">✓ Token set</span>}
+                    <div className="token-section">
+                      <div className="token-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 7a2 2 0 0 1 2 2M9 17a2 2 0 0 0 2 2M12 15V5M5 12h14" />
+                          <circle cx="12" cy="12" r="9" />
+                        </svg>
+                        <span>GitHub Token (Optional)</span>
+                      </div>
+                      <div className="token-input-wrapper">
+                        <input
+                          type="password"
+                          id="github-token"
+                          value={githubToken}
+                          onChange={(e) => {
+                            setGithubToken(e.target.value);
+                            setTokenSaved(false);
+                          }}
+                          placeholder="Enter personal access token for private repositories"
+                          className="modern-input"
+                        />
+                        {tokenSaved && 
+                          <div className="token-saved-badge">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                            Token set
+                          </div>
+                        }
+                      </div>
                     </div>
                   )}
-                  <button 
-                    type="submit" 
-                    className="gemini-submit-btn"
-                    disabled={loading || !url}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
                 </div>
               ) : (
                 <div 
@@ -984,9 +1004,8 @@ contract SecureContract {
                       </ul>
                       <button 
                         type="submit" 
-                        className="gemini-submit-btn"
+                        className="scan-files-btn"
                         disabled={loading}
-                        style={{position: 'static', transform: 'none', marginTop: '1rem'}}
                       >
                         Scan Files
                       </button>
@@ -997,25 +1016,6 @@ contract SecureContract {
               
               {error && <div className="error-message">{error}</div>}
             </form>
-            
-            <div className="action-buttons">
-              <button className="action-button" title="Search">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
-                  <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </button>
-              <button className="action-button" title="New Scan">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 4.5V19.5M19.5 12H4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-              <button className="action-button" title="History">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 16L8.586 11.414C8.96106 11.0391 9.46967 10.8284 10 10.8284C10.5303 10.8284 11.0389 11.0391 11.414 11.414L16 16M14 14L15.586 12.414C15.9611 12.0391 16.4697 11.8284 17 11.8284C17.5303 11.8284 18.0389 12.0391 18.414 12.414L20 14M14 8H14.01M6 20H18C18.5304 20 19.0391 19.7893 19.4142 19.4142C19.7893 19.0391 20 18.5304 20 18V6C20 5.46957 19.7893 4.96086 19.4142 4.58579C19.0391 4.21071 18.5304 4 18 4H6C5.46957 4 4.96086 4.21071 4.58579 4.58579C4.21071 4.96086 4 5.46957 4 6V18C4 18.5304 4.21071 19.0391 4.58579 19.4142C4.96086 19.7893 5.46957 20 6 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            </div>
           </div>
         </div>
       </main>
