@@ -561,25 +561,31 @@ contract SecureContract {
         {activeTab === 'summary' && (
           <div className="tab-content">
             {results.summary && (
-              <div className="gemini-card summary-card">
-                <h4>Executive Summary</h4>
-                <p>{results.summary.summary}</p>
-                
-                <h5>Risk Assessment: <span className={`risk-level ${results.summary.risk_assessment?.toLowerCase()}`}>
-                  {results.summary.risk_assessment || 'Unknown'}
-                </span></h5>
+              <div className="summary-container">
+                <div className="gemini-card summary-card">
+                  <div className="summary-header">
+                    <h4>Executive Summary</h4>
+                    <div className={`risk-badge ${results.summary.risk_assessment?.toLowerCase()}`}>
+                      {results.summary.risk_assessment || 'Unknown'} Risk
+                    </div>
+                  </div>
+                  
+                  <div className="summary-content">
+                    <p>{results.summary.summary}</p>
+                  </div>
+                </div>
                 
                 {results.summary.remediation_suggestions && results.summary.remediation_suggestions.length > 0 && (
-                  <div className="remediation-suggestions">
-                    <h5>Remediation Suggestions</h5>
-                    <ul>
+                  <div className="gemini-card remediation-card">
+                    <h4>Remediation Suggestions</h4>
+                    <ul className="remediation-list">
                       {results.summary.remediation_suggestions.map((suggestion, idx) => (
-                        <li key={idx}>
+                        <li key={idx} className="remediation-item">
                           {typeof suggestion === 'object' ? 
                             (suggestion.finding ? 
                               <>
-                                <strong>{suggestion.finding}</strong>
-                                {suggestion.suggestion && <>: {suggestion.suggestion}</>}
+                                <span className="suggestion-title">{suggestion.finding}</span>
+                                {suggestion.suggestion && <span className="suggestion-detail">: {suggestion.suggestion}</span>}
                               </> 
                               : JSON.stringify(suggestion))
                             : suggestion}
@@ -590,8 +596,8 @@ contract SecureContract {
                 )}
 
                 {results.summary && results.summary.technical_findings && results.summary.technical_findings.length > 0 && (
-                  <div className="technical-findings">
-                    <h5>Technical Findings</h5>
+                  <div className="gemini-card technical-card">
+                    <h4>Technical Findings</h4>
                     {(() => {
                       // Group findings by vulnerability type
                       const groupedFindings = {};
@@ -678,19 +684,26 @@ contract SecureContract {
                       
                       // Render grouped findings
                       return (
-                        <ul>
+                        <div className="findings-grid">
                           {Object.entries(groupedFindings).map(([type, data], idx) => (
-                            <li key={idx}>
-                              <strong>{type}</strong>
+                            <div key={idx} className="finding-item">
+                              <div className="finding-header">
+                                <h5>{type}</h5>
+                                <div className="finding-tag">Security</div>
+                              </div>
                               {data.locations.length > 0 && (
-                                <ul className="finding-locations">
-                                  <li>Lines: {data.locations.join(', ')}</li>
-                                </ul>
+                                <div className="finding-location">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                  </svg>
+                                  Lines: {data.locations.join(', ')}
+                                </div>
                               )}
                               <p className="finding-description">{data.description}</p>
-                            </li>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       );
                     })()}
                   </div>
