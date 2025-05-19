@@ -815,27 +815,38 @@ contract SecureContract {
         
         {activeTab === 'debug' && (
           <div className="tab-content">
-            <div className="debug-section">
-              <div className="debug-container">
-                <p><strong>Note:</strong> This section shows the raw response data from the backend for debugging purposes.</p>
-                <pre className="debug-json">
-                  {JSON.stringify(results, null, 2)}
-                </pre>
-                {/* Add special handling for structure analysis */}
-                {results && results.summary && (
-                  <div className="response-structure">
-                    <h5>Response Structure Analysis:</h5>
-                    <p>Summary Type: {typeof results.summary}</p>
-                    {results.summary.remediation_suggestions && (
-                      <p>Remediation Suggestions: Array with {results.summary.remediation_suggestions.length} items, 
-                        first item type: {typeof results.summary.remediation_suggestions[0]}</p>
-                    )}
-                    {results.summary.technical_findings && (
-                      <p>Technical Findings: Array with {results.summary.technical_findings.length} items, 
-                        first item type: {typeof results.summary.technical_findings[0]}</p>
-                    )}
+            <div className="summary-container">
+              <div className="gemini-card debug-intro-card">
+                <div className="debug-header">
+                  <h4>Debug Information</h4>
+                  <div className="debug-tag">Developer Tools</div>
+                </div>
+                <p className="debug-intro">This section shows the raw response data from the backend for debugging and developer insights.</p>
+              </div>
+                
+              <div className="gemini-card debug-data-card">
+                <div className="debug-controls">
+                  <h4>API Response</h4>
+                  <div className="debug-actions">
+                    <button 
+                      className="debug-action-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                      </svg>
+                      Copy JSON
+                    </button>
                   </div>
-                )}
+                </div>
+                <div className="debug-json-container">
+                  <pre className="debug-json">
+                    {JSON.stringify(results, null, 2)}
+                  </pre>
+                </div>
               </div>
             </div>
           </div>
