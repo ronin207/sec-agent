@@ -20,7 +20,7 @@ logger = get_logger('security_agent')
 class SecuritySummary(BaseModel):
     """Schema for security summary output"""
     summary: str = Field(description="Overall summary of the security scan findings")
-    technical_findings: List[str] = Field(description="List of technical findings in order of severity")
+    technical_findings: List[str] = Field(description="List of ALL technical findings in order of severity")
     remediation_suggestions: List[str] = Field(description="List of remediation suggestions")
     risk_assessment: str = Field(description="Overall risk assessment (Critical, High, Medium, Low)")
 
@@ -76,7 +76,7 @@ class ResultSummarizer:
             
             Analyze the following security scan results and provide:
             1. A concise overall summary
-            2. Key technical findings in order of severity
+            2. ALL technical findings in order of severity (include every finding, not just key ones)
             3. Remediation suggestions for each finding
             4. Overall risk assessment (Critical, High, Medium, Low)
             
@@ -95,9 +95,11 @@ class ResultSummarizer:
             
             Format your response as a JSON object with the following fields:
             - summary: Overall summary of the security scan findings
-            - technical_findings: List of technical findings in order of severity
+            - technical_findings: List of ALL technical findings in order of severity
             - remediation_suggestions: List of remediation suggestions
             - risk_assessment: Overall risk assessment (Critical, High, Medium, Low)
+            
+            IMPORTANT: Make sure to include ALL findings in the technical_findings list, not just a subset of key findings.
             
             Return only the JSON object without additional text.
             """
