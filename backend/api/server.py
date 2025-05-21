@@ -19,6 +19,7 @@ from backend.core.security_agent import SecurityAgent
 from backend.utils.helpers import populate_sample_data, get_logger
 from backend.config.settings import API_HOST, API_PORT, API_DEBUG
 from backend.core.input_handler import InputHandler  # Make sure we can access InputHandler directly
+from backend.core.result_summarizer import ResultSummarizer
 
 # Configure logging
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
@@ -31,6 +32,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST"]}})
 
 # Initialize the security agent components
 kb = SecurityKnowledgeBase()
+result_summarizer = ResultSummarizer(model_name="gpt-4o-mini")
 security_agent = SecurityAgent()
 
 # Set up temp directory for file uploads
@@ -52,7 +54,8 @@ def index():
     return jsonify({
         "status": "running",
         "message": "Security Agent API is running",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "llm_model": "gpt-4o-mini"
     })
 
 @app.route('/api/scan', methods=['POST'])
@@ -74,6 +77,9 @@ def scan():
                 token=token
             )
             
+            # Add model info
+            result["model_used"] = "gpt-4o-mini"
+            
             return jsonify(result)
         
         # Handle regular target scanning
@@ -89,6 +95,9 @@ def scan():
         
         # Run the scan
         result = security_agent.run(target, output_format=output_format, recursive=recursive)
+        
+        # Add model info
+        result["model_used"] = "gpt-4o-mini"
         
         return jsonify(result)
     except Exception as e:
@@ -129,6 +138,9 @@ def scan_github_repo():
             token=token
         )
         
+        # Add model info
+        result["model_used"] = "gpt-4o-mini"
+        
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error in GitHub scan endpoint: {str(e)}", exc_info=True)
@@ -136,7 +148,8 @@ def scan_github_repo():
             'error': str(e),
             'status': 'error',
             'timestamp': datetime.now().isoformat(),
-            'scan_type': 'github_repo'
+            'scan_type': 'github_repo',
+            'model_used': 'gpt-4o-mini'
         }), 500
 
 @app.route('/api/scan/files', methods=['POST'])
@@ -163,6 +176,9 @@ def scan_files_endpoint():
         # Call security agent to scan files
         results = security_agent.scan_multiple(file_paths)
         
+        # Add model info
+        results["model_used"] = "gpt-4o-mini"
+        
         # Clean up temp files
         for file_path in file_paths:
             if os.path.exists(file_path):
@@ -172,19 +188,23 @@ def scan_files_endpoint():
     
     except Exception as e:
         logger.error(f"Error in scan files endpoint: {str(e)}")
-        return jsonify({"result": "error", "message": str(e)})
+        return jsonify({
+            "result": "error", 
+            "message": str(e),
+            "model_used": "gpt-4o-mini"
+        })
 
 @app.route('/api/status', methods=['GET'])
 def status_endpoint():
     """Endpoint to check server status"""
-    return jsonify({"status": "online"})
+    return jsonify({"status": "online", "model": "gpt-4o-mini"})
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """
     Simple health check endpoint
     """
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'model': 'gpt-4o-mini'})
 
 @app.route('/api/set-github-token', methods=['POST'])
 def set_github_token():

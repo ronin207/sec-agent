@@ -24,6 +24,13 @@ class SecuritySummary(BaseModel):
     remediation_suggestions: List[str] = Field(description="List of remediation suggestions")
     risk_assessment: str = Field(description="Overall risk assessment (Critical, High, Medium, Low)")
 
+class StandardizedToolOutput(BaseModel):
+    """Schema for standardized tool output"""
+    findings: List[Dict] = Field(description="List of standardized findings")
+    findings_count: int = Field(description="Total number of findings")
+    findings_by_severity: Dict = Field(description="Count of findings by severity")
+    summary: str = Field(description="Brief summary of the scan results")
+
 class ResultSummarizer:
     """
     Generates human-readable summaries of security scan results using OpenAI API.
@@ -42,6 +49,117 @@ class ResultSummarizer:
         self.model_name = model_name
         self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
     
+    def standardize_tool_output(self, tool_name: str, raw_output: str) -> Dict:
+        """
+        Standardize a security tool's raw output using LLM.
+        
+        Args:
+            tool_name: Name of the security tool that generated the output
+            raw_output: The raw output from the security tool
+            
+        Returns:
+            Dictionary containing standardized findings and summary
+        """
+        logger.info(f"Standardizing output from {tool_name} using {self.model_name}")
+        
+        # Create a prompt for standardizing the tool output
+        prompt = ChatPromptTemplate.from_template(
+            """You are an expert security analyst tasked with standardizing security tool outputs.
+            
+            Tool: {tool_name}
+            
+            Parse the following raw output from the security tool and convert it into a standardized format:
+            
+            ```
+            {raw_output}
+            ```
+            
+            Extract all security findings from the tool output and standardize them.
+            
+            Each finding should have the following structure:
+            - name: Brief name/title of the vulnerability
+            - severity: Severity level (Critical, High, Medium, Low, or Info)
+            - description: Detailed description of the vulnerability
+            - location: Location in code where the vulnerability was found (if available)
+            - mitigation: Recommended fix or mitigation (if available)
+            
+            Format your response as a JSON object with the following fields:
+            - findings: Array of standardized findings with the structure described above
+            - findings_count: Total number of findings
+            - findings_by_severity: Object counting findings by severity (e.g., {"High": 2, "Medium": 3})
+            - summary: Brief summary of the scan results
+            
+            Return only the JSON object without additional text.
+            """
+        )
+        
+        # Format the inputs
+        try:
+            formatted_prompt = prompt.format(
+                tool_name=tool_name,
+                raw_output=raw_output[:8000]  # Limit raw output to avoid token limits
+            )
+            logger.debug(f"🔍 Sending prompt to OpenAI for standardizing {tool_name} output")
+            
+            logger.info(f"🚀 CALLING OPENAI API TO STANDARDIZE {tool_name} OUTPUT - START")
+            response = self.llm.invoke(formatted_prompt)
+            logger.info(f"🚀 CALLING OPENAI API TO STANDARDIZE {tool_name} OUTPUT - COMPLETE")
+            
+            logger.info("✅ Successfully received response from OpenAI API")
+            
+            # Extract the JSON content from the message
+            content = response.content
+            if isinstance(content, str):
+                # Find JSON in the content if it's wrapped in text
+                start_idx = content.find('{')
+                end_idx = content.rfind('}') + 1
+                if start_idx >= 0 and end_idx > start_idx:
+                    json_str = content[start_idx:end_idx]
+                    result = json.loads(json_str)
+                    logger.info(f"✅ Successfully parsed standardized output for {tool_name}")
+                    return result
+            
+            # If we couldn't extract valid JSON, return a fallback response
+            logger.warning(f"⚠️ Could not extract valid JSON from OpenAI API response for {tool_name}")
+            return self._get_fallback_standardized_output(tool_name, raw_output)
+            
+        except Exception as e:
+            logger.error(f"❌ Error standardizing {tool_name} output: {str(e)}", exc_info=True)
+            return self._get_fallback_standardized_output(tool_name, raw_output)
+    
+    def _get_fallback_standardized_output(self, tool_name: str, raw_output: str) -> Dict:
+        """
+        Generate a fallback standardized output if the API call fails.
+        
+        Args:
+            tool_name: Name of the security tool
+            raw_output: Raw output from the security tool
+            
+        Returns:
+            Dictionary containing basic standardized output
+        """
+        # Extract some basic information from the raw output
+        lines = raw_output.split('\n')
+        findings_count = 0
+        
+        # Try to count findings based on common patterns in security tool outputs
+        for line in lines:
+            if "error" in line.lower() or "warning" in line.lower() or "vulnerability" in line.lower():
+                findings_count += 1
+        
+        return {
+            "findings": [{
+                "name": f"Unprocessed {tool_name} Finding",
+                "severity": "Unknown",
+                "description": f"The system encountered an error while processing the raw output from {tool_name}. Please review the raw output manually.",
+                "location": "Unknown",
+                "mitigation": "Review the raw tool output manually to identify and address any security issues."
+            }],
+            "findings_count": max(findings_count, 1),
+            "findings_by_severity": {"Unknown": max(findings_count, 1)},
+            "summary": f"Failed to standardize {tool_name} output. Found approximately {findings_count} potential issues."
+        }
+
     def generate_summary(self, aggregated_results: Union[Dict, str, Any]) -> Dict:
         """
         Generate a human-readable summary of the security scan results.

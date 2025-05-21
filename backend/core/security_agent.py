@@ -1,37 +1,26 @@
 """
-Security Agent module for automating vulnerability assessments.
-Main module that integrates all the components.
+Main Security Agent module for the Security Agent.
+Coordinates all components and handles the full security assessment process.
 """
-from typing import Dict, List, Optional, Any, Union
 import os
-import json
+import re
 import time
-from datetime import datetime
 import tempfile
 import shutil
-import subprocess
-import glob
-from github import Github
+import json
+import uuid
 from urllib.parse import urlparse
+from datetime import datetime
+from typing import Dict, List, Optional, Any, Union, Tuple
+from langchain.document_loaders import GitLoader, TextLoader, DirectoryLoader
 
-# Import langchain components
-try:
-    from langchain_community.document_loaders.git import GitLoader
-except ImportError:
-    # Define a placeholder that will raise a clear error if used
-    class GitLoader:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("langchain_community is not installed. Please install with: pip install langchain-community")
-
-# Import all required components
+# Import from existing modules
 from backend.core.input_handler import InputHandler
 from backend.core.cve_knowledge_base import CVEKnowledgeQuery
 from backend.core.tool_selector import SecurityToolSelector
 from backend.core.scan_executor import ScanExecutor
 from backend.core.result_aggregator import ResultAggregator
 from backend.core.result_summarizer import ResultSummarizer
-
-# Import helpers
 from backend.utils.helpers import get_logger
 
 # Get logger
@@ -60,9 +49,9 @@ class SecurityAgent:
         self.input_handler = InputHandler()
         self.cve_knowledge_query = CVEKnowledgeQuery(api_key=self.api_key)
         self.tool_selector = SecurityToolSelector()
-        self.scan_executor = ScanExecutor()
-        self.result_aggregator = ResultAggregator()
         self.result_summarizer = ResultSummarizer(api_key=self.api_key)
+        self.scan_executor = ScanExecutor(result_summarizer=self.result_summarizer)
+        self.result_aggregator = ResultAggregator()
         
         # Keep track of last input and partial results for recovery
         self._last_input = None

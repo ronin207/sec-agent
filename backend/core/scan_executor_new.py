@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Scan Executor module for the Security Agent.
 Handles execution of security scans using the selected tools.
@@ -10,11 +9,9 @@ import os
 from typing import Dict, List, Optional, Any, Union
 import subprocess
 from datetime import datetime
-import re
 
 # Import helpers
-from backend.utils.helpers import get_logger, extract_code_snippet, generate_suggested_fix
-from backend.core.result_summarizer import ResultSummarizer
+from backend.utils.helpers import get_logger, extract_code_snippet
 
 # Get logger
 logger = get_logger('security_agent')
@@ -24,14 +21,8 @@ class ScanExecutor:
     Executes security scans using the selected tools.
     """
     
-    def __init__(self, result_summarizer=None):
-        """
-        Initialize the Scan Executor.
-        
-        Args:
-            result_summarizer: ResultSummarizer instance (optional)
-        """
-        self.result_summarizer = result_summarizer or ResultSummarizer()
+    def __init__(self):
+        pass
     
     def execute_scans(self, input_data: Dict, selected_tools: Union[Dict, List]) -> Dict:
         """
@@ -112,34 +103,12 @@ class ScanExecutor:
                         logger.debug(f"Status: {tool_result.get('status')}")
                         logger.debug(f"Number of findings (pre-deduplication): {len(tool_result.get('findings', []))}")
                         
-                        # Standardize the tool output using LLM
-                        if tool_result.get('status') == 'success' and tool_result.get('raw_output'):
-                            logger.info(f"Standardizing output from {tool.get('name')} for file {file_relative_path}")
-                            standardized_output = self.result_summarizer.standardize_tool_output(
-                                tool.get('name'),
-                                tool_result.get('raw_output', '')
-                            )
-                            
-                            if standardized_output and 'findings' in standardized_output:
-                                # Add file information to each finding
-                                for finding in standardized_output.get('findings', []):
-                                    finding['file'] = file_path
-                                
-                                # Update the tool result with standardized findings
-                                tool_result['findings'] = standardized_output.get('findings', [])
-                                tool_result['standardized'] = True
-                                
-                                # Add summary from standardization if available
-                                if 'summary' in standardized_output:
-                                    tool_result['summary'] = standardized_output.get('summary')
-                        
                         # Add file-specific results
                         file_result = {
                             "file": file_path,
                             "findings": tool_result.get("findings", []),
                             "execution_time": tool_result.get("execution_time", 0),
-                            "status": tool_result.get("status", "unknown"),
-                            "summary": tool_result.get("summary", "")
+                            "status": tool_result.get("status", "unknown")
                         }
                         combined_tool_result["file_results"].append(file_result)
                         
@@ -170,30 +139,14 @@ class ScanExecutor:
                     logger.debug(f"Status: {tool_result.get('status')}")
                     logger.debug(f"Number of findings (pre-deduplication): {len(tool_result.get('findings', []))}")
                     
-                    # Standardize the tool output using LLM
-                    if tool_result.get('status') == 'success' and tool_result.get('raw_output'):
-                        logger.info(f"Standardizing output from {tool.get('name')}")
-                        standardized_output = self.result_summarizer.standardize_tool_output(
-                            tool.get('name'),
-                            tool_result.get('raw_output', '')
-                        )
-                        
-                        if standardized_output and 'findings' in standardized_output:
-                            # Update the tool result with standardized findings
-                            tool_result['findings'] = standardized_output.get('findings', [])
-                            tool_result['standardized'] = True
-                            
-                            # Add summary from standardization if available
-                            if 'summary' in standardized_output:
-                                tool_result['summary'] = standardized_output.get('summary')
-                    
                     # Log each finding in detail
                     for i, finding in enumerate(tool_result.get('findings', []), 1):
-                        logger.debug(f"Finding {i} from {tool.get('name')} (standardized):")
+                        logger.debug(f"Finding {i} from {tool.get('name')} (raw, pre-deduplication):")
+                        logger.debug(f"  ID: {finding.get('id')}")
                         logger.debug(f"  Name: {finding.get('name')}")
                         logger.debug(f"  Severity: {finding.get('severity')}")
                         logger.debug(f"  Description: {finding.get('description')}")
-                        logger.debug(f"  Location: {finding.get('location', 'Not specified')}")
+                        logger.debug(f"  Location: {finding.get('location')}")
                     
                     scan_results['tool_results'].append({
                         "tool_id": tool.get('id'),
@@ -202,9 +155,7 @@ class ScanExecutor:
                         "execution_time": tool_result.get("execution_time"),
                         "status": tool_result.get("status"),
                         "findings": tool_result.get("findings"),
-                        "raw_output": tool_result.get("raw_output"),
-                        "summary": tool_result.get("summary", ""),
-                        "standardized": tool_result.get("standardized", False)
+                        "raw_output": tool_result.get("raw_output")
                     })
                 
             except Exception as e:
@@ -437,12 +388,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing Slither: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _execute_mythril(self, target: str) -> Dict:
         """
@@ -529,12 +475,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing Mythril: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _execute_solhint(self, target: str) -> Dict:
         """
@@ -619,12 +560,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing Solhint: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _execute_xray(self, target: str) -> Dict:
         """
@@ -699,12 +635,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing X-Ray: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _execute_vrust(self, target: str) -> Dict:
         """
@@ -779,12 +710,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing VRust: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _execute_scout(self, target: str) -> Dict:
         """
@@ -859,12 +785,7 @@ class ScanExecutor:
             }
         except Exception as e:
             logger.error(f"Error executing Scout: {str(e)}")
-            return {
-                "status": "error",
-                "execution_time": time.time() - start_time,
-                "findings": [],
-                "raw_output": f"Error: {str(e)}"
-            }
+            return None
 
     def _enhance_findings_with_code(self, findings: List[Dict], target_file: str) -> None:
         """
@@ -880,24 +801,6 @@ class ScanExecutor:
             
         logger.info(f"Enhancing {len(findings)} findings with code snippets from {target_file}")
         
-        # Create a copy of the file in a more predictable location if it's in a temp directory
-        target_copy = None
-        if '/tmp/' in target_file or '/var/folders/' in target_file and os.path.exists(target_file):
-            try:
-                filename = os.path.basename(target_file)
-                target_copy = os.path.join(os.getcwd(), "cached_files", filename)
-                os.makedirs(os.path.dirname(target_copy), exist_ok=True)
-                with open(target_file, 'r', encoding='utf-8') as src_file:
-                    content = src_file.read()
-                with open(target_copy, 'w', encoding='utf-8') as dest_file:
-                    dest_file.write(content)
-                logger.info(f"Created persistent copy of temp file at {target_copy}")
-            except Exception as e:
-                logger.error(f"Failed to create persistent copy of file: {str(e)}")
-        
-        # Use the original path or the copy if available
-        file_to_use = target_copy if target_copy and os.path.exists(target_copy) else target_file
-        
         for finding in findings:
             # Skip if no location is provided
             if 'location' not in finding:
@@ -908,30 +811,7 @@ class ScanExecutor:
             location = finding.get('location', '')
             logger.info(f"Extracting code for location: {location}")
             
-            # Special handling for pragma-related findings (common in Solidity)
-            if ('solc ' in finding.get('name', '').lower() or 
-                'pragma' in finding.get('name', '').lower() or
-                'version' in finding.get('name', '').lower()):
-                
-                # Try to extract the pragma line directly from the file
-                try:
-                    with open(file_to_use, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        pragma_match = re.search(r'(pragma solidity [^;]+;)', content)
-                        if pragma_match:
-                            code_data = {
-                                'vulnerable_code': pragma_match.group(1),
-                                'line_range': location.split(':')[-1] if ':' in location else "1",
-                                'suggested_fix': generate_suggested_fix(pragma_match.group(1), file_to_use)
-                            }
-                            logger.info(f"Directly extracted pragma statement: {pragma_match.group(1)}")
-                        else:
-                            code_data = extract_code_snippet(file_to_use, location)
-                except Exception as e:
-                    logger.error(f"Error extracting pragma: {str(e)}")
-                    code_data = extract_code_snippet(file_to_use, location)
-            else:
-                code_data = extract_code_snippet(file_to_use, location)
+            code_data = extract_code_snippet(target_file, location)
             
             # Add code data to the finding
             finding['vulnerable_code'] = code_data.get('vulnerable_code')
@@ -940,7 +820,7 @@ class ScanExecutor:
             
             # Add file path if not already present
             if 'file' not in finding:
-                finding['file'] = os.path.basename(target_file)  # Use just the basename for cleaner output
+                finding['file'] = target_file
                 
             # Log the result
             if finding['vulnerable_code'] == "// Unable to extract vulnerable code":

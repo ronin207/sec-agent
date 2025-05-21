@@ -565,8 +565,15 @@ contract SecureContract {
                 <div className="gemini-card summary-card">
                   <div className="summary-header">
                     <h4>Executive Summary</h4>
-                    <div className={`risk-badge ${results.summary.risk_assessment?.toLowerCase()}`}>
-                      {results.summary.risk_assessment || 'Unknown'} Risk
+                    <div className="summary-meta">
+                      <div className={`risk-badge ${results.summary.risk_assessment?.toLowerCase()}`}>
+                        {results.summary.risk_assessment || 'Unknown'} Risk
+                      </div>
+                      {results.model_used && (
+                        <div className="model-badge">
+                          Model: {results.model_used}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -752,13 +759,16 @@ contract SecureContract {
                             <span className="section-title">Vulnerable Code</span>
                             <button 
                               className="copy-btn" 
-                              onClick={() => navigator.clipboard.writeText(getDefaultSuggestion(finding.name || '').vulnerable)}
+                              onClick={() => navigator.clipboard.writeText(
+                                finding.vulnerable_code || getDefaultSuggestion(finding.name || '').vulnerable
+                              )}
                             >
                               Copy
                             </button>
                           </div>
                           <div className="code-content">
-                            {getDefaultSuggestion(finding.name || '').vulnerable}
+                            {finding.vulnerable_code || getDefaultSuggestion(finding.name || '').vulnerable}
+                            {finding.line_range && <div className="line-range">Lines: {finding.line_range}</div>}
                           </div>
                         </div>
                         
@@ -767,13 +777,15 @@ contract SecureContract {
                             <span className="section-title">Suggested Fix</span>
                             <button 
                               className="copy-btn" 
-                              onClick={() => navigator.clipboard.writeText(getDefaultSuggestion(finding.name || '').fixed)}
+                              onClick={() => navigator.clipboard.writeText(
+                                finding.suggested_fix || getDefaultSuggestion(finding.name || '').fixed
+                              )}
                             >
                               Copy
                             </button>
                           </div>
                           <div className="code-content">
-                            {getDefaultSuggestion(finding.name || '').fixed}
+                            {finding.suggested_fix || getDefaultSuggestion(finding.name || '').fixed}
                           </div>
                         </div>
                       </div>
@@ -801,37 +813,19 @@ contract SecureContract {
         
         {activeTab === 'debug' && (
           <div className="tab-content">
-            <div className="summary-container">
-              <div className="gemini-card debug-intro-card">
+            <div className="debug-container">
+              <div className="gemini-card debug-card">
                 <div className="debug-header">
                   <h4>Debug Information</h4>
-                  <div className="debug-tag">Developer Tools</div>
+                  {results.model_used && (
+                    <div className="model-badge">
+                      Model: {results.model_used}
+                    </div>
+                  )}
                 </div>
-                <p className="debug-intro">This section shows the raw response data from the backend for debugging and developer insights.</p>
-              </div>
                 
-              <div className="gemini-card debug-data-card">
-                <div className="debug-controls">
-                  <h4>API Response</h4>
-                  <div className="debug-actions">
-                    <button 
-                      className="debug-action-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText(JSON.stringify(results, null, 2));
-                      }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                      </svg>
-                      Copy JSON
-                    </button>
-                  </div>
-                </div>
-                <div className="debug-json-container">
-                  <pre className="debug-json">
-                    {JSON.stringify(results, null, 2)}
-                  </pre>
+                <div className="debug-content">
+                  <pre>{JSON.stringify(results, null, 2)}</pre>
                 </div>
               </div>
             </div>
