@@ -1,0 +1,24 @@
+def _read_file_content(self, file_path: str) -> str:
+    """
+    Read the content of a file.
+    
+    Args:
+        file_path: Path to the file
+        
+    Returns:
+        String containing the file content
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        # Try with a different encoding if utf-8 fails
+        try:
+            with open(file_path, 'r', encoding='latin-1') as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            return ""
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {str(e)}")
+        return "" 

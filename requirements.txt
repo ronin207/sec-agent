@@ -18,3 +18,12 @@ packaging==23.1
 rich>=13.5.0
 validators>=0.22.0
 requests>=2.31.0
+
+# New security tools
+manticore==0.3.7
+echidna-parade>=1.0.0
+aderyn>=1.2.0
+securify2>=0.1.0
+xray-solana>=0.1.5
+vrust>=0.0.1
+substrate-scout>=0.4.1

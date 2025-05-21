@@ -67,9 +67,53 @@ class SecurityToolSelector:
             },
             "manticore": {
                 "name": "Manticore",
-                "description": "Symbolic execution tool for smart contracts",
-                "capabilities": ["solidity", "symbolic_execution"],
-                "command": "manticore {target} --quick-mode"
+                "description": "Symbolic execution tool for smart contracts by Trail of Bits",
+                "capabilities": ["solidity", "symbolic_execution", "full_path_testing"],
+                "command": "manticore {target} --solc-optimize --quick-mode"
+            },
+            "echidna": {
+                "name": "Echidna",
+                "description": "Property-based fuzzer for Solidity/Vyper smart contracts by Trail of Bits",
+                "capabilities": ["solidity", "fuzzing", "property_testing"],
+                "command": "echidna {target} --config echidna.config.yaml"
+            },
+            "aderyn": {
+                "name": "Aderyn",
+                "description": "Fast static analyzer for Solidity written in Rust by Cyfrin",
+                "capabilities": ["solidity", "ast_analysis", "static_analysis"],
+                "command": "aderyn {target} --json"
+            },
+            "securify2": {
+                "name": "Securify v2",
+                "description": "High-precision static analysis tool for Solidity using Datalog",
+                "capabilities": ["solidity", "static_analysis", "formal_verification"],
+                "command": "python -m securify {target} --output {target}.securify.json"
+            }
+        }
+        
+        # Available tools for Solana contract security scanning
+        self.solana_tools = {
+            "xray": {
+                "name": "X-Ray",
+                "description": "Static analyzer for Rust-based Solana programs by Sec3",
+                "capabilities": ["solana", "rust", "static_analysis", "llvm"],
+                "command": "xray scan {target} --output-format=json"
+            },
+            "vrust": {
+                "name": "VRust",
+                "description": "Vulnerability detection framework for Solana smart contracts",
+                "capabilities": ["solana", "rust", "vulnerability_detection"],
+                "command": "vrust analyze {target} --report-json"
+            }
+        }
+        
+        # Available tools for Polkadot contract security scanning
+        self.polkadot_tools = {
+            "scout": {
+                "name": "Scout",
+                "description": "Modular static analyzer for ink! (Rust-based) smart contracts by CoinFabrik",
+                "capabilities": ["polkadot", "substrate", "soroban", "static_analysis"],
+                "command": "scout scan {target} --output-json"
             }
         }
     
@@ -78,7 +122,7 @@ class SecurityToolSelector:
         Select appropriate security tools based on input type and CVE information.
         
         Args:
-            input_type: Type of input ('website' or 'solidity_contract')
+            input_type: Type of input ('website', 'solidity_contract', 'solana_contract', or 'polkadot_contract')
             cve_info: CVE information and risk assessment, could be a dict or string
             
         Returns:
@@ -95,6 +139,10 @@ class SecurityToolSelector:
             return self._select_website_tools(cve_info)
         elif input_type == 'solidity_contract':
             return self._select_solidity_tools(cve_info)
+        elif input_type == 'solana_contract':
+            return self._select_solana_tools(cve_info)
+        elif input_type == 'polkadot_contract':
+            return self._select_polkadot_tools(cve_info)
         else:
             logger.warning(f"Unknown input type: {input_type}")
             return []
@@ -175,15 +223,25 @@ class SecurityToolSelector:
             "reason": "Code quality and security best practices"
         })
         
-        # Check if symbolic execution is needed based on risk assessment
-        symbolic_execution_needed = False
+        # Include Aderyn for fast AST-based analysis
+        selected_tools.append({
+            "id": "aderyn",
+            "name": self.solidity_tools["aderyn"]["name"],
+            "description": self.solidity_tools["aderyn"]["description"],
+            "command": self.solidity_tools["aderyn"]["command"],
+            "reason": "Fast static analysis with Rust-based parser"
+        })
+        
+        # Determine if we need in-depth symbolic execution analysis
+        deep_analysis_needed = False
         for risk in cve_info.get("risks", []):
-            if "critical" in risk.get("risk_level", "").lower() or "reentrancy" in risk.get("description", "").lower():
-                symbolic_execution_needed = True
+            risk_desc = risk.get("description", "").lower()
+            if "critical" in risk.get("risk_level", "").lower() or any(term in risk_desc for term in ["reentrancy", "overflow", "underflow", "logic error"]):
+                deep_analysis_needed = True
                 break
         
-        if symbolic_execution_needed:
-            # Choose between Mythril and Manticore (Mythril is generally faster)
+        # Use Mythril and/or Manticore for deep analysis
+        if deep_analysis_needed:
             selected_tools.append({
                 "id": "mythril",
                 "name": self.solidity_tools["mythril"]["name"],
@@ -191,8 +249,77 @@ class SecurityToolSelector:
                 "command": self.solidity_tools["mythril"]["command"],
                 "reason": "In-depth symbolic execution for critical vulnerabilities"
             })
+            
+            # Add Manticore for more comprehensive path analysis
+            selected_tools.append({
+                "id": "manticore",
+                "name": self.solidity_tools["manticore"]["name"],
+                "description": self.solidity_tools["manticore"]["description"],
+                "command": self.solidity_tools["manticore"]["command"],
+                "reason": "Full execution path testing for critical contracts"
+            })
         
-        return selected_tools 
+        # Use Echidna if the contract has property functions
+        # In a real implementation, we would check for test properties in the code
+        selected_tools.append({
+            "id": "echidna",
+            "name": self.solidity_tools["echidna"]["name"],
+            "description": self.solidity_tools["echidna"]["description"],
+            "command": self.solidity_tools["echidna"]["command"],
+            "reason": "Fuzzing to discover edge cases in contract logic"
+        })
+        
+        # Add Securify for formal verification
+        high_value_contract = any("high value" in risk.get("description", "").lower() for risk in cve_info.get("risks", []))
+        if high_value_contract or deep_analysis_needed:
+            selected_tools.append({
+                "id": "securify2",
+                "name": self.solidity_tools["securify2"]["name"],
+                "description": self.solidity_tools["securify2"]["description"],
+                "command": self.solidity_tools["securify2"]["command"],
+                "reason": "Formal verification for high-value contracts"
+            })
+        
+        return selected_tools
+    
+    def _select_solana_tools(self, cve_info: Dict) -> List:
+        """Select tools for Solana contract security scanning"""
+        selected_tools = []
+        
+        # Always include X-Ray for Solana programs
+        selected_tools.append({
+            "id": "xray",
+            "name": self.solana_tools["xray"]["name"],
+            "description": self.solana_tools["xray"]["description"],
+            "command": self.solana_tools["xray"]["command"],
+            "reason": "Comprehensive static analysis for Solana programs"
+        })
+        
+        # Include VRust for vulnerability detection
+        selected_tools.append({
+            "id": "vrust",
+            "name": self.solana_tools["vrust"]["name"],
+            "description": self.solana_tools["vrust"]["description"],
+            "command": self.solana_tools["vrust"]["command"],
+            "reason": "Specialized vulnerability detection for Solana contracts"
+        })
+        
+        return selected_tools
+    
+    def _select_polkadot_tools(self, cve_info: Dict) -> List:
+        """Select tools for Polkadot/Substrate contract security scanning"""
+        selected_tools = []
+        
+        # Include Scout for ink! contracts
+        selected_tools.append({
+            "id": "scout",
+            "name": self.polkadot_tools["scout"]["name"],
+            "description": self.polkadot_tools["scout"]["description"],
+            "command": self.polkadot_tools["scout"]["command"],
+            "reason": "Static analysis for ink! smart contracts"
+        })
+        
+        return selected_tools
 
 
 class ToolSelector(SecurityToolSelector):
@@ -205,7 +332,7 @@ class ToolSelector(SecurityToolSelector):
         Select appropriate security tools based on content type.
         
         Args:
-            content_type: Type of content ('website' or 'solidity_contract')
+            content_type: Type of content ('website', 'solidity_contract', 'solana_contract', or 'polkadot_contract')
             
         Returns:
             List containing selected tools and their configuration

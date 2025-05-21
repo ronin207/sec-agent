@@ -33,54 +33,54 @@ class InputHandler:
     
     def validate_and_classify(self, user_input: str) -> Dict:
         """
-        Validate the user input and classify it as a website URL, Solidity contract, multiple files, or GitHub repository.
+        Validate and classify user input.
         
         Args:
-            user_input: Either a URL, path to file(s), directory, or GitHub repository URL
+            user_input: Website URL, file path, or GitHub repository
             
         Returns:
-            Dictionary containing the input type, the validated input, and additional context
+            Dictionary containing the classified input
         """
-        # Sanitize the input
-        user_input = user_input.strip()
+        logger.info(f"Validating input: {user_input}")
         
-        # Check if it's a URL
+        # Check if input is a valid URL
         if self._is_valid_url(user_input):
-            # Determine if it's a GitHub repo URL
+            # Check if it's a GitHub repository
             if self._is_github_repo(user_input):
-                # Process the repository using the GitHub API
                 return self._process_github_repo(user_input)
             else:
-                # Assume it's a regular website URL
-                return {
-                    "type": "website",
-                    "input": user_input,
-                    "source": "url",
-                    "is_multiple": False
-                }
+                return self._process_website(user_input)
         
-        # Check if it's a directory
-        elif os.path.isdir(user_input):
-            return self._process_directory(user_input)
+        # Check if input is a valid file path
+        elif os.path.exists(user_input):
+            # Check if it's a directory
+            if os.path.isdir(user_input):
+                return self._process_directory(user_input)
+            else:
+                # Check if it's a valid Solidity file
+                if user_input.endswith('.sol'):
+                    return self._process_solidity_contract(user_input)
+                # Check if it's a Solana program (Rust file in a Solana project)
+                elif user_input.endswith('.rs') and self._is_solana_program(user_input):
+                    return self._process_solana_contract(user_input)
+                # Check if it's an ink! contract for Polkadot/Substrate
+                elif (user_input.endswith('.rs') and self._is_ink_contract(user_input)) or user_input.endswith('.ink'):
+                    return self._process_polkadot_contract(user_input)
+                # Check if it's a Python file
+                elif user_input.endswith('.py'):
+                    return self._process_python_file(user_input)
+                # Check if it's a JavaScript file
+                elif user_input.endswith('.js'):
+                    return self._process_javascript_file(user_input)
+                else:
+                    return self._process_generic_file(user_input)
         
-        # Check if it's a glob pattern for multiple files
-        elif '*' in user_input or '?' in user_input:
-            return self._process_glob_pattern(user_input)
-        
-        # Check if it's a single Solidity file
-        elif self._is_solidity_file(user_input):
+        # If input is neither a valid URL nor a valid file path
+        else:
             return {
-                "type": "solidity_contract",
-                "input": user_input,
-                "source": "local_file",
-                "is_multiple": False
+                "type": "error",
+                "message": "Invalid input. Please provide a valid URL, file path, or GitHub repository."
             }
-        
-        # If it's not a recognized input type, return an error
-        return {
-            "type": "error",
-            "message": "Invalid input format. Please provide a valid website URL, Solidity contract file/URL, directory path, or GitHub repository URL."
-        }
     
     def _is_valid_url(self, url: str) -> bool:
         """Check if the input is a valid URL"""
@@ -327,6 +327,22 @@ class InputHandler:
             # Perform final check for Solidity files in downloaded files
             downloaded_solidity_files = [f for f in files if f.endswith('.sol')]
             
+            # Check for Solana and Polkadot contracts
+            solana_files = []
+            polkadot_files = []
+            
+            # Look for Rust files that might be Solana or Polkadot contracts
+            rust_files = [f for f in files if f.endswith('.rs')]
+            for rust_file in rust_files:
+                if self._is_solana_program(rust_file):
+                    solana_files.append(rust_file)
+                elif self._is_ink_contract(rust_file):
+                    polkadot_files.append(rust_file)
+            
+            # Also add .ink files for Polkadot
+            ink_files = [f for f in files if f.endswith('.ink')]
+            polkadot_files.extend(ink_files)
+            
             # If Solidity files were found, classify as solidity_contract regardless of initial determination
             if downloaded_solidity_files:
                 logger.info(f"Found {len(downloaded_solidity_files)} Solidity files in repository")
@@ -337,6 +353,28 @@ class InputHandler:
                     "source": "github",
                     "repo_url": repo_url,
                     "is_multiple": len(downloaded_solidity_files) > 1
+                }
+            # If Solana files were found, classify as solana_contract
+            elif solana_files:
+                logger.info(f"Found {len(solana_files)} Solana program files in repository")
+                return {
+                    "type": "solana_contract",
+                    "input": repo_url,
+                    "files": solana_files,
+                    "source": "github",
+                    "repo_url": repo_url,
+                    "is_multiple": len(solana_files) > 1
+                }
+            # If Polkadot files were found, classify as polkadot_contract
+            elif polkadot_files:
+                logger.info(f"Found {len(polkadot_files)} Polkadot/ink! contract files in repository")
+                return {
+                    "type": "polkadot_contract",
+                    "input": repo_url,
+                    "files": polkadot_files,
+                    "source": "github",
+                    "repo_url": repo_url,
+                    "is_multiple": len(polkadot_files) > 1
                 }
             
             # Otherwise, use the preliminary type or classify as a web application
@@ -385,14 +423,55 @@ class InputHandler:
             except Exception as e:
                 logger.error(f"Error processing file {getattr(file_content, 'path', 'unknown')}: {str(e)}")
     
-    def _process_directory(self, directory_path: str, source: str = "local_directory", repo_url: str = None) -> Dict:
+    def _read_file_content(self, file_path: str) -> str:
+        """
+        Read the content of a file.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            String containing the file content
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except UnicodeDecodeError:
+            # Try with a different encoding if utf-8 fails
+            try:
+                with open(file_path, 'r', encoding='latin-1') as f:
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Error reading file {file_path}: {str(e)}")
+                return ""
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            return ""
+    
+    def _process_directory(self, directory_path: str, source: str = "local_directory", repo_url: str = None, recursive: bool = False) -> Dict:
         """
         Process a directory to identify files for scanning
         """
         # Check for Solidity files
         solidity_files = glob.glob(os.path.join(directory_path, "**", "*.sol"), recursive=True)
         
-        # If Solidity files are found, classify as solidity_contracts
+        # Check for Rust files that might be Solana programs
+        rust_files = glob.glob(os.path.join(directory_path, "**", "*.rs"), recursive=True)
+        
+        # Filter Rust files to find Solana programs
+        solana_files = []
+        polkadot_files = []
+        for rust_file in rust_files:
+            if self._is_solana_program(rust_file):
+                solana_files.append(rust_file)
+            elif self._is_ink_contract(rust_file):
+                polkadot_files.append(rust_file)
+        
+        # Also look for .ink files specifically for Polkadot
+        ink_files = glob.glob(os.path.join(directory_path, "**", "*.ink"), recursive=True)
+        polkadot_files.extend(ink_files)
+        
+        # Determine the primary type of contracts in this directory
         if solidity_files:
             return {
                 "type": "solidity_contract",
@@ -401,6 +480,24 @@ class InputHandler:
                 "source": source,
                 "repo_url": repo_url,
                 "is_multiple": len(solidity_files) > 1
+            }
+        elif solana_files:
+            return {
+                "type": "solana_contract",
+                "input": directory_path,
+                "files": solana_files,
+                "source": source,
+                "repo_url": repo_url,
+                "is_multiple": len(solana_files) > 1
+            }
+        elif polkadot_files:
+            return {
+                "type": "polkadot_contract", 
+                "input": directory_path,
+                "files": polkadot_files,
+                "source": source,
+                "repo_url": repo_url,
+                "is_multiple": len(polkadot_files) > 1
             }
         
         # Otherwise, look for other file types to determine type
@@ -428,45 +525,197 @@ class InputHandler:
             "message": "No recognizable files found for security scanning."
         }
     
-    def _process_glob_pattern(self, glob_pattern: str) -> Dict:
+    def _process_solidity_contract(self, file_path: str) -> Dict:
         """
-        Process a glob pattern to find matching files
+        Process a Solidity contract file.
+        
+        Args:
+            file_path: Path to the Solidity file
+            
+        Returns:
+            Dictionary containing the processed Solidity contract
         """
-        matching_files = glob.glob(glob_pattern, recursive=True)
-        
-        if not matching_files:
-            return {
-                "type": "error",
-                "message": f"No files match the pattern: {glob_pattern}"
-            }
-        
-        # Check for Solidity files
-        solidity_files = [f for f in matching_files if f.endswith('.sol')]
-        
-        if solidity_files:
-            return {
-                "type": "solidity_contract",
-                "input": glob_pattern,
-                "files": solidity_files,
-                "source": "local_files",
-                "is_multiple": len(solidity_files) > 1
-            }
-        
-        # Otherwise, assume they're web application files
+        logger.info(f"Processing Solidity contract: {file_path}")
         return {
-            "type": "web_application",
-            "input": glob_pattern,
-            "files": matching_files,
-            "source": "local_files",
-            "is_multiple": len(matching_files) > 1
+            "type": "solidity_contract",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
         }
     
-    def _is_solidity_file(self, file_path: str) -> bool:
-        """Check if the input is a path to a Solidity file"""
-        if not os.path.isfile(file_path):
+    def _process_solana_contract(self, file_path: str) -> Dict:
+        """
+        Process a Solana smart contract.
+        
+        Args:
+            file_path: Path to the Solana program file
+            
+        Returns:
+            Dictionary containing the processed Solana contract
+        """
+        logger.info(f"Processing Solana contract: {file_path}")
+        return {
+            "type": "solana_contract",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
+        }
+    
+    def _process_polkadot_contract(self, file_path: str) -> Dict:
+        """
+        Process a Polkadot/Substrate smart contract.
+        
+        Args:
+            file_path: Path to the ink! contract file
+            
+        Returns:
+            Dictionary containing the processed Polkadot contract
+        """
+        logger.info(f"Processing Polkadot contract: {file_path}")
+        return {
+            "type": "polkadot_contract",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
+        }
+    
+    def _process_python_file(self, file_path: str) -> Dict:
+        """
+        Process a Python file.
+        
+        Args:
+            file_path: Path to the Python file
+            
+        Returns:
+            Dictionary containing the processed Python file
+        """
+        logger.info(f"Processing Python file: {file_path}")
+        return {
+            "type": "python_file",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
+        }
+    
+    def _process_javascript_file(self, file_path: str) -> Dict:
+        """
+        Process a JavaScript file.
+        
+        Args:
+            file_path: Path to the JavaScript file
+            
+        Returns:
+            Dictionary containing the processed JavaScript file
+        """
+        logger.info(f"Processing JavaScript file: {file_path}")
+        return {
+            "type": "javascript_file",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
+        }
+    
+    def _process_generic_file(self, file_path: str) -> Dict:
+        """
+        Process a generic file.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            Dictionary containing the processed file
+        """
+        logger.info(f"Processing generic file: {file_path}")
+        return {
+            "type": "generic_file",
+            "input": file_path,
+            "file_content": self._read_file_content(file_path),
+            "file_size": os.path.getsize(file_path),
+            "file_extension": os.path.splitext(file_path)[1]
+        }
+    
+    def _is_solana_program(self, file_path: str) -> bool:
+        """
+        Check if a Rust file is part of a Solana program.
+        
+        Args:
+            file_path: Path to the Rust file
+            
+        Returns:
+            Boolean indicating if the file is part of a Solana program
+        """
+        # Check if the file is a Rust file
+        if not file_path.endswith('.rs'):
             return False
         
-        return file_path.endswith(".sol")
+        # Look for Solana-specific imports or Cargo.toml with Solana dependencies
+        try:
+            # Check file content for Solana-specific imports
+            with open(file_path, 'r') as f:
+                content = f.read()
+                if any(marker in content for marker in [
+                    'solana_program', 'anchor_lang', 'solana_sdk', 
+                    '#[program]', 'entrypoint!', 'ProgramResult'
+                ]):
+                    return True
+            
+            # Check if there's a Cargo.toml file in the parent directory with Solana dependencies
+            cargo_path = os.path.join(os.path.dirname(file_path), 'Cargo.toml')
+            if os.path.exists(cargo_path):
+                with open(cargo_path, 'r') as f:
+                    cargo_content = f.read()
+                    if any(dep in cargo_content for dep in [
+                        'solana-program', 'anchor-lang', 'solana-sdk'
+                    ]):
+                        return True
+        except Exception as e:
+            logger.warning(f"Error checking if file is a Solana program: {str(e)}")
+        
+        return False
+    
+    def _is_ink_contract(self, file_path: str) -> bool:
+        """
+        Check if a Rust file is an ink! smart contract for Polkadot/Substrate.
+        
+        Args:
+            file_path: Path to the Rust file
+            
+        Returns:
+            Boolean indicating if the file is an ink! contract
+        """
+        # Check if the file is a Rust file
+        if not file_path.endswith('.rs'):
+            return False
+        
+        # Look for ink!-specific markers
+        try:
+            with open(file_path, 'r') as f:
+                content = f.read()
+                if any(marker in content for marker in [
+                    '#[ink::contract]', '#[ink(storage)]', '#[ink::trait]',
+                    'ink_lang', 'ink_storage', 'ink_env', 'ink_prelude',
+                    '#[ink_lang::contract]', '#[derive(ink::Storage)]'
+                ]):
+                    return True
+            
+            # Check if there's a Cargo.toml file in the parent directory with ink! dependencies
+            cargo_path = os.path.join(os.path.dirname(file_path), 'Cargo.toml')
+            if os.path.exists(cargo_path):
+                with open(cargo_path, 'r') as f:
+                    cargo_content = f.read()
+                    if any(dep in cargo_content for dep in [
+                        'ink_lang', 'ink-lang', 'ink_storage', 'ink_env', 'parity-scale-codec'
+                    ]):
+                        return True
+        except Exception as e:
+            logger.warning(f"Error checking if file is an ink! contract: {str(e)}")
+        
+        return False
     
     def process_input(self, user_input: str) -> Dict:
         """
@@ -562,59 +811,4 @@ class InputHandler:
             "files": files,
             "source": "multiple_inputs",
             "is_multiple": True
-        }
-
-    def _process_directory(self, directory_path: str, source: str = "local_directory", repo_url: str = None, recursive: bool = False) -> Dict:
-        """
-        Process a directory to identify files for scanning
-        
-        Args:
-            directory_path: Path to the directory
-            source: Source of the directory (local_directory, github)
-            repo_url: URL of the GitHub repository, if applicable
-            recursive: Whether to scan subdirectories recursively
-        
-        Returns:
-            Dictionary containing classified files
-        """
-        # Define the recursive flag for glob
-        recursion = "**/" if recursive else ""
-        
-        # Check for Solidity files
-        solidity_files = glob.glob(os.path.join(directory_path, f"{recursion}*.sol"), recursive=recursive)
-        
-        # If Solidity files are found, classify as solidity_contracts
-        if solidity_files:
-            return {
-                "type": "solidity_contract",
-                "input": directory_path,
-                "files": solidity_files,
-                "source": source,
-                "repo_url": repo_url,
-                "is_multiple": len(solidity_files) > 1
-            }
-        
-        # Otherwise, look for other file types to determine type
-        # Check for web application files
-        web_files = []
-        for ext in ['.html', '.js', '.php', '.py', '.jsx', '.ts', '.tsx', '.css', '.scss', '.json']:
-            web_files.extend(glob.glob(os.path.join(directory_path, f"{recursion}*{ext}"), recursive=recursive))
-        
-        if web_files:
-            return {
-                "type": "web_application",
-                "input": directory_path,
-                "files": web_files,
-                "source": source,
-                "repo_url": repo_url,
-                "is_multiple": len(web_files) > 1
-            }
-        
-        # If no recognized files are found
-        return {
-            "type": "unknown",
-            "input": directory_path,
-            "source": source,
-            "repo_url": repo_url,
-            "message": "No recognizable files found for security scanning."
         } 

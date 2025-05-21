@@ -782,6 +782,22 @@ Location: {finding['location']}
                 "description": "Potential division by zero",
                 "location": "TokenContract.sol:124",
                 "evidence": "Division where denominator could be zero"
+            },
+            {
+                "id": "manticore-unintended-ether-1",
+                "name": "Unintended Ether Leakage",
+                "severity": "High",
+                "description": "Contract can receive Ether that cannot be withdrawn by the owner",
+                "location": "TokenContract.sol:78-86",
+                "evidence": "Fallback function accepts Ether but no withdraw mechanism exists"
+            },
+            {
+                "id": "manticore-unreachable-1",
+                "name": "Unreachable State",
+                "severity": "Low",
+                "description": "Identified code that is unreachable under any execution path",
+                "location": "TokenContract.sol:156-161",
+                "evidence": "Code path with impossible conditions"
             }
         ]
         
@@ -800,6 +816,14 @@ Number of analyzed instructions: 1337
 - Path constraints: (storage[6] == 0)
   Transaction sequence:
   1. Contract.divide(0)
+  
+- Unintended Ether Leakage at TokenContract.sol:78-86
+  Severity: High
+  Description: Contract can receive Ether that cannot be withdrawn by the owner
+  
+- Unreachable State at TokenContract.sol:156-161
+  Severity: Low
+  Description: Identified code that is unreachable under any execution path
 """
         
         return {
@@ -807,4 +831,525 @@ Number of analyzed instructions: 1337
             "execution_time": execution_time,
             "findings": findings,
             "raw_output": raw_output
-        } 
+        }
+    
+    def _mock_echidna_results(self, target: str, execution_time: float) -> Dict:
+        """Mock Echidna fuzzing results"""
+        findings = [
+            {
+                "id": "echidna-invariant-1",
+                "name": "Invariant Violation",
+                "severity": "High",
+                "description": "Property 'totalSupply should match balance sum' violated by fuzzing",
+                "location": "TokenContract.sol:42",
+                "evidence": "echidna_check_total_supply() failed with counterexample"
+            },
+            {
+                "id": "echidna-overflow-1",
+                "name": "Integer Overflow in Mint Function",
+                "severity": "High",
+                "description": "Fuzz testing detected an overflow in the mint function",
+                "location": "TokenContract.sol:95-98",
+                "evidence": "echidna_no_overflow() failed with inputs: address=0x123, amount=115792089237316195423570985008687907853269984665640564039457584007913129639935"
+            },
+            {
+                "id": "echidna-revert-1",
+                "name": "Function Reverts Unexpectedly",
+                "severity": "Medium",
+                "description": "Function reverts under specific conditions that should be valid",
+                "location": "TokenContract.sol:118-125",
+                "evidence": "transfer() failed with inputs: address=0x456, amount=50"
+            }
+        ]
+        
+        raw_output = """
+Echidna fuzzing report:
+
+tested with echidna-test v2.0.0
+
++ Contract: TokenContract
+  - echidna_check_total_supply: FAILED! 💥
+      Call sequence:
+      1. mint(0xd00a, 1000)
+      2. burn(0xd00a, 600)
+      3. transferFrom(0xd00a, 0xbeef, 700) returned false
+      4. Invariant violation: totalSupply != sum of balances
+      
+  - echidna_no_overflow: FAILED! 💥
+      Call sequence:
+      1. mint(0x123, 115792089237316195423570985008687907853269984665640564039457584007913129639935)
+      
+  - echidna_transfer_succeeds: FAILED! 💥
+      Call sequence: 
+      1. mint(0x456, 100)
+      2. transfer(0x456, 50) returned false
+      
+  - echidna_balance_consistent: PASSED ✓
+
+Coverage: 87.4% (112/128 branches covered)
+Max gas used: 156,431
+Unique failures: 3
+Total executions: 15,427
+"""
+        
+        return {
+            "status": "success",
+            "execution_time": execution_time,
+            "findings": findings,
+            "raw_output": raw_output
+        }
+        
+    def _mock_aderyn_results(self, target: str, execution_time: float) -> Dict:
+        """Mock Aderyn scanning results"""
+        findings = [
+            {
+                "id": "aderyn-centralization-1",
+                "name": "Centralization Risk",
+                "severity": "Medium",
+                "description": "Critical functions can only be called by a single address",
+                "location": "TokenContract.sol:32-36",
+                "evidence": "onlyOwner modifier used on key functions"
+            },
+            {
+                "id": "aderyn-unchecked-return-1",
+                "name": "Unchecked ERC20 Transfer",
+                "severity": "Medium",
+                "description": "Return value from ERC20 transfer not checked",
+                "location": "TokenContract.sol:156",
+                "evidence": "token.transfer(recipient, amount)"
+            },
+            {
+                "id": "aderyn-gas-1",
+                "name": "Gas Optimization",
+                "severity": "Low",
+                "description": "Use uint256 instead of uint8/uint16/uint32 for gas efficiency",
+                "location": "TokenContract.sol:28-30",
+                "evidence": "uint8 decimals"
+            },
+            {
+                "id": "aderyn-naming-1",
+                "name": "Inconsistent Naming Convention",
+                "severity": "Info",
+                "description": "Inconsistent use of naming conventions in contract",
+                "location": "TokenContract.sol:28-45",
+                "evidence": "Mixed camelCase and snake_case"
+            }
+        ]
+        
+        raw_output = """
+Aderyn Security Analysis Report
+===============================
+
+Target: TokenContract.sol
+Timestamp: 2023-05-24T10:15:30Z
+Scanner Version: 0.3.2
+
+SUMMARY
+-------
+High: 0
+Medium: 2
+Low: 1
+Info: 1
+Total: 4
+
+FINDINGS
+--------
+[M-01] Centralization Risk
+  TokenContract.sol:32-36
+  Critical functions can only be called by a single address
+  
+[M-02] Unchecked ERC20 Transfer
+  TokenContract.sol:156
+  Return value from ERC20 transfer not checked
+  
+[L-01] Gas Optimization
+  TokenContract.sol:28-30
+  Use uint256 instead of uint8/uint16/uint32 for gas efficiency
+  
+[I-01] Inconsistent Naming Convention
+  TokenContract.sol:28-45
+  Inconsistent use of naming conventions in contract
+
+COVERAGE
+--------
+Files analyzed: 1
+AST nodes covered: 386/386 (100.0%)
+Analysis time: 0.21s
+"""
+        
+        return {
+            "status": "success",
+            "execution_time": execution_time,
+            "findings": findings,
+            "raw_output": raw_output
+        }
+        
+    def _mock_securify2_results(self, target: str, execution_time: float) -> Dict:
+        """Mock Securify2 scanning results"""
+        findings = [
+            {
+                "id": "securify-outdated-solidity-1",
+                "name": "Outdated Compiler Version",
+                "severity": "Low",
+                "description": "Contract uses an outdated compiler version",
+                "location": "TokenContract.sol:1",
+                "evidence": "pragma solidity ^0.6.0"
+            },
+            {
+                "id": "securify-locked-ether-1",
+                "name": "Locked Ether",
+                "severity": "High",
+                "description": "Contract can receive Ether but has no withdraw function",
+                "location": "TokenContract.sol:85-90",
+                "evidence": "receive() external payable { } with no withdrawal mechanism"
+            },
+            {
+                "id": "securify-shadowing-1",
+                "name": "State Variable Shadowing",
+                "severity": "Medium",
+                "description": "Local variable shadows state variable",
+                "location": "TokenContract.sol:105",
+                "evidence": "uint256 owner = msg.sender"
+            },
+            {
+                "id": "securify-reentrancy-1",
+                "name": "Reentrancy",
+                "severity": "High",
+                "description": "Reentrancy vulnerability in the withdraw function",
+                "location": "TokenContract.sol:135-142",
+                "evidence": "External call before state update"
+            }
+        ]
+        
+        raw_output = """
+Securify v2.0 Analysis Results
+==============================
+
+Target: TokenContract.sol
+Solidity Version: 0.6.12
+Analysis Timestamp: 2023-05-24T08:30:15Z
+
+VULNERABILITIES DETECTED
+------------------------
+4 vulnerabilities found:
+
+[HIGH] Locked Ether (LKD-ETHER)
+  TokenContract.sol:85-90
+  Contract can receive Ether but has no withdraw function
+  
+[HIGH] Reentrancy (REENTRANCY)
+  TokenContract.sol:135-142
+  External call before state update
+  
+[MEDIUM] State Variable Shadowing (VAR-SHADOW)
+  TokenContract.sol:105
+  Local variable shadows state variable
+  
+[LOW] Outdated Compiler Version (OLD-COMPILER)
+  TokenContract.sol:1
+  Contract uses an outdated compiler version
+
+COMPLIANCE
+----------
+SWC-107: Reentrancy - VIOLATED
+SWC-103: Floating Pragma - VIOLATED
+SWC-105: Unprotected Ether Withdrawal - VIOLATED
+SWC-119: Shadowing State Variables - VIOLATED
+
+ANALYSIS INFO
+------------
+Analysis took 3.24s
+Patterns checked: 21
+Patterns violated: 4
+"""
+        
+        return {
+            "status": "success",
+            "execution_time": execution_time,
+            "findings": findings,
+            "raw_output": raw_output
+        }
+        
+    def _mock_xray_results(self, target: str, execution_time: float) -> Dict:
+        """Mock X-Ray (Solana) scanning results"""
+        findings = [
+            {
+                "id": "xray-ownership-1",
+                "name": "Missing Ownership Validation",
+                "severity": "High",
+                "description": "Critical instruction missing ownership validation",
+                "location": "src/main.rs:156-170",
+                "evidence": "Missing check for program_id == token_program_id"
+            },
+            {
+                "id": "xray-signer-check-1",
+                "name": "Missing Signer Check",
+                "severity": "High",
+                "description": "Instruction doesn't validate that the authority is a signer",
+                "location": "src/main.rs:215-230",
+                "evidence": "No validation that transfer_authority.is_signer"
+            },
+            {
+                "id": "xray-account-validation-1",
+                "name": "Insufficient Account Validation",
+                "severity": "Medium",
+                "description": "Program does not validate that accounts have the correct owner",
+                "location": "src/main.rs:108-110",
+                "evidence": "No check for ctx.accounts.vault.owner"
+            },
+            {
+                "id": "xray-pda-1",
+                "name": "Incorrect PDA Derivation",
+                "severity": "Medium",
+                "description": "Program derived address (PDA) uses incorrect seeds",
+                "location": "src/main.rs:89-95",
+                "evidence": "PDA derivation missing program_id seed"
+            }
+        ]
+        
+        raw_output = """
+X-Ray Security Scanner v1.2.0
+=============================
+
+Target: Solana Program
+Analysis Mode: LLVM IR Static Analysis
+Timestamp: 2023-05-24T15:42:11Z
+
+SECURITY FINDINGS
+----------------
+Total findings: 4
+High: 2
+Medium: 2
+Low: 0
+Info: 0
+
+[H-01] Missing Ownership Validation
+  src/main.rs:156-170
+  Critical instruction missing ownership validation
+  Impact: Could lead to unauthorized access to program funds
+  
+[H-02] Missing Signer Check
+  src/main.rs:215-230
+  Instruction doesn't validate that the authority is a signer
+  Impact: Potential for transaction replay attacks
+  
+[M-01] Insufficient Account Validation
+  src/main.rs:108-110
+  Program does not validate that accounts have the correct owner
+  Impact: May allow use of accounts controlled by other programs
+  
+[M-02] Incorrect PDA Derivation
+  src/main.rs:89-95
+  Program derived address (PDA) uses incorrect seeds
+  Impact: Could lead to using the wrong account for program operations
+
+CODE COVERAGE
+------------
+Lines analyzed: 587/632 (92.9%)
+Branches analyzed: 124/135 (91.9%)
+Functions analyzed: 32/35 (91.4%)
+Analysis time: 4.23s
+"""
+        
+        return {
+            "status": "success",
+            "execution_time": execution_time,
+            "findings": findings,
+            "raw_output": raw_output
+        }
+        
+    def _mock_vrust_results(self, target: str, execution_time: float) -> Dict:
+        """Mock VRust (Solana) scanning results"""
+        findings = [
+            {
+                "id": "vrust-integer-overflow-1",
+                "name": "Integer Overflow",
+                "severity": "High",
+                "description": "Integer overflow in arithmetic operation",
+                "location": "src/processor.rs:246",
+                "evidence": "amount.checked_add(fee).unwrap()"
+            },
+            {
+                "id": "vrust-unchecked-account-1",
+                "name": "Unchecked Account Data",
+                "severity": "High",
+                "description": "Account data is not properly validated before use",
+                "location": "src/processor.rs:189-195",
+                "evidence": "Directly accessing account.data without validating length"
+            },
+            {
+                "id": "vrust-instruction-injection-1",
+                "name": "Instruction Injection Vulnerability",
+                "severity": "Medium",
+                "description": "Cross-program invocation lacks proper validation",
+                "location": "src/processor.rs:315-330",
+                "evidence": "CPI to token program accepts user-controlled data"
+            },
+            {
+                "id": "vrust-reinitialization-1",
+                "name": "Account Reinitialization",
+                "severity": "Medium",
+                "description": "Program allows account reinitialization",
+                "location": "src/processor.rs:125-135",
+                "evidence": "Missing check if account is already initialized"
+            }
+        ]
+        
+        raw_output = """
+VRust Analysis Report
+====================
+
+Target: Solana Program
+Rust Version: 1.68.0
+SDK Version: 1.13.5
+Timestamp: 2023-05-24T12:10:05Z
+
+VULNERABILITY SUMMARY
+--------------------
+High: 2
+Medium: 2
+Low: 0
+Info: 0
+Total: 4
+
+DETAILED FINDINGS
+----------------
+[HIGH] Integer Overflow
+  src/processor.rs:246
+  Integer overflow in arithmetic operation
+  Recommendation: Use checked_add with proper error handling
+  Impact: Could lead to incorrect calculations or token amount manipulation
+  
+[HIGH] Unchecked Account Data
+  src/processor.rs:189-195
+  Account data is not properly validated before use
+  Recommendation: Always check account.data.len() before accessing data
+  Impact: Could cause program to panic or access invalid memory
+  
+[MEDIUM] Instruction Injection Vulnerability
+  src/processor.rs:315-330
+  Cross-program invocation lacks proper validation
+  Recommendation: Validate all instruction data before passing to external programs
+  Impact: May allow attackers to execute unintended instructions
+  
+[MEDIUM] Account Reinitialization
+  src/processor.rs:125-135
+  Program allows account reinitialization
+  Recommendation: Check if account is already initialized before initialization
+  Impact: Could allow overwriting account data
+
+SCAN METRICS
+-----------
+Files analyzed: 8
+Lines of code: 2,345
+Analysis time: 6.72s
+Memory use: 256MB
+"""
+        
+        return {
+            "status": "success",
+            "execution_time": execution_time,
+            "findings": findings,
+            "raw_output": raw_output
+        }
+        
+    def _mock_scout_results(self, target: str, execution_time: float) -> Dict:
+        """Mock Scout (Polkadot/ink!) scanning results"""
+        findings = [
+            {
+                "id": "scout-reentrancy-1",
+                "name": "Reentrancy Vulnerability",
+                "severity": "High",
+                "description": "Contract is vulnerable to reentrancy attacks",
+                "location": "lib.rs:203-215",
+                "evidence": "State changes after external calls"
+            },
+            {
+                "id": "scout-delegate-1",
+                "name": "Unsafe Delegate Call",
+                "severity": "High",
+                "description": "Unsafe delegate call to user-controlled address",
+                "location": "lib.rs:245-252",
+                "evidence": "delegate_call() with user-provided parameters"
+            },
+            {
+                "id": "scout-access-control-1",
+                "name": "Insufficient Access Control",
+                "severity": "Medium",
+                "description": "Critical function missing access control",
+                "location": "lib.rs:178-185",
+                "evidence": "pub fn set_fee_recipient lacks #[ink(admin_only)]"
+            },
+            {
+                "id": "scout-panic-1",
+                "name": "Potential Panic",
+                "severity": "Medium",
+                "description": "Function may panic under certain conditions",
+                "location": "lib.rs:298",
+                "evidence": "Division without checking for zero"
+            },
+            {
+                "id": "scout-storage-1",
+                "name": "Inefficient Storage Use",
+                "severity": "Low",
+                "description": "Contract uses inefficient storage patterns",
+                "location": "lib.rs:56-62",
+                "evidence": "Repetitive storage operations"
+            }
+        ]
+        
+        raw_output = """
+Scout Analysis Report for ink! Smart Contract
+===========================================
+
+Target: ink! Contract
+Analysis Timestamp: 2023-05-24T14:25:00Z
+Scout Version: 0.4.1
+
+SECURITY FINDINGS
+----------------
+Total findings: 5
+High: 2
+Medium: 2
+Low: 1
+Info: 0
+
+[HIGH] Reentrancy Vulnerability
+  lib.rs:203-215
+  Contract is vulnerable to reentrancy attacks
+  State changes after external calls
+  
+[HIGH] Unsafe Delegate Call
+  lib.rs:245-252
+  Unsafe delegate call to user-controlled address
+  delegate_call() with user-provided parameters
+  
+[MEDIUM] Insufficient Access Control
+  lib.rs:178-185
+  Critical function missing access control
+  pub fn set_fee_recipient lacks #[ink(admin_only)]
+  
+[MEDIUM] Potential Panic
+  lib.rs:298
+  Function may panic under certain conditions
+  Division without checking for zero
+  
+[LOW] Inefficient Storage Use
+  lib.rs:56-62
+  Contract uses inefficient storage patterns
+  Repetitive storage operations
+
+CODE COVERAGE
+------------
+Lines analyzed: 452/470 (96.2%)
+Functions analyzed: 35/35 (100.0%)
+Analysis time: 2.15s
+
+RECOMMENDATIONS
+--------------
+1. Add guard for reentrancy using a mutex pattern
+2. Always validate addresses before delegate calls
+3. Add proper access control modifiers to sensitive functions
+4. Use checked arithmetic operations
+5. Optimize storage patterns to reduce gas costs
+""" 
