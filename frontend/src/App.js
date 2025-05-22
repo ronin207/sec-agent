@@ -563,6 +563,31 @@ contract SecureContract {
       );
     }
     
+    // Ensure consistent counts in summary view by using the actual counts from findingsBySeverity
+    if (results.formatted_results && results.formatted_results.summary && results.formatted_results.summary.by_severity) {
+      const actualCounts = {};
+      Object.keys(findingsBySeverity).forEach(severity => {
+        actualCounts[severity] = findingsBySeverity[severity].length;
+      });
+      
+      // Update the summary counts to match actual findings
+      results.formatted_results.summary.by_severity = {
+        ...results.formatted_results.summary.by_severity,
+        ...actualCounts
+      };
+      
+      // Update total findings count
+      results.formatted_results.summary.total_findings = recalculatedTotalFindings;
+    }
+    
+    // Define severity order for correct display
+    const severityOrder = ['critical', 'high', 'medium', 'low', 'info', 'optimization'];
+    
+    // Order the severity tabs according to severity
+    const orderedSeverities = severityOrder.filter(severity => 
+      findingsBySeverity[severity] && findingsBySeverity[severity].length > 0
+    );
+    
     // Render tabs and findings based on active tab
     return (
       <div className="findings-section">
@@ -579,7 +604,13 @@ contract SecureContract {
             </button>
             <button 
               className={`tab-button ${activeTab === 'issues' ? 'active' : ''}`}
-              onClick={() => setActiveTab('issues')}
+              onClick={() => {
+                setActiveTab('issues');
+                // Auto-select the highest severity that has findings
+                if (orderedSeverities.length > 0) {
+                  setActiveSeverity(orderedSeverities[0]);
+                }
+              }}
             >
               Issues
             </button>
@@ -591,21 +622,19 @@ contract SecureContract {
             </button>
           </div>
           
-          {/* Severity tabs (only show in Issues tab) */}
+          {/* Severity tabs (only show in Issues tab) - now in correct severity order */}
           {activeTab === 'issues' && (
             <div className="severity-tabs">
-              {Object.keys(findingsBySeverity).map(severity => (
-                findingsBySeverity[severity].length > 0 && (
-                  <button
-                    key={severity}
-                    className={`severity-tab ${activeSeverity === severity ? 'active' : ''} ${severity}`}
-                    onClick={() => setActiveSeverity(severity)}
-                  >
-                    <span className="severity-dot"></span>
-                    {severity.charAt(0).toUpperCase() + severity.slice(1)}
-                    <span className="finding-count">{findingsBySeverity[severity].length}</span>
-                  </button>
-                )
+              {orderedSeverities.map(severity => (
+                <button
+                  key={severity}
+                  className={`severity-tab ${activeSeverity === severity ? 'active' : ''} ${severity}`}
+                  onClick={() => setActiveSeverity(severity)}
+                >
+                  <span className="severity-dot"></span>
+                  {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                  <span className="finding-count">{findingsBySeverity[severity].length}</span>
+                </button>
               ))}
             </div>
           )}
@@ -656,14 +685,16 @@ contract SecureContract {
                       <div className="findings-statistics">
                         <h5>Findings by Severity</h5>
                         <div className="severity-stats">
-                          {Object.entries(results.formatted_results.summary.by_severity).map(([severity, count]) => 
-                            count > 0 ? (
+                          {/* Show severity stats in correct order */}
+                          {severityOrder.map(severity => {
+                            const count = results.formatted_results.summary.by_severity[severity] || 0;
+                            return count > 0 ? (
                               <div key={severity} className={`stat-item ${severity.toLowerCase()}`}>
                                 <div className="stat-count">{count}</div>
                                 <div className="stat-label">{severity.charAt(0).toUpperCase() + severity.slice(1)}</div>
                               </div>
-                            ) : null
-                          )}
+                            ) : null;
+                          })}
                         </div>
                       </div>
                     )}
@@ -675,7 +706,15 @@ contract SecureContract {
                   <div className="gemini-card top-findings-card">
                     <h4>Top Security Findings</h4>
                     <div className="top-findings-list">
-                      {results.formatted_results.findings.slice(0, 5).map((finding, idx) => (
+                      {/* Sort findings by severity before slicing */}
+                      {results.formatted_results.findings
+                        .sort((a, b) => {
+                          const severityA = a.severity.toLowerCase();
+                          const severityB = b.severity.toLowerCase();
+                          return severityOrder.indexOf(severityA) - severityOrder.indexOf(severityB);
+                        })
+                        .slice(0, 5)
+                        .map((finding, idx) => (
                         <div key={idx} className="top-finding-item">
                           <div className="finding-header">
                             <div className={`severity-indicator ${finding.severity.toLowerCase()}`}></div>
