@@ -1728,20 +1728,33 @@ body {
 .model-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  background-color: #f0f4ff;
-  color: #4a6bdf;
-  border: 1px solid #d0dbff;
-  border-radius: 4px;
+  padding: 6px 10px;
+  background-color: rgba(66, 133, 244, 0.1);
+  color: #4285f4;
+  border-radius: 16px;
   font-size: 12px;
   font-weight: 500;
   margin-left: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.model-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #4285f4;
+  border-radius: 50%;
+  margin-right: 6px;
 }
 
 /* Update summary-meta to handle multiple badges */
 .summary-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Add styles for the findings statistics */

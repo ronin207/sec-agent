@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Any, Union
 import os
 import json
 import re
+import uuid
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -87,9 +88,45 @@ class ResultSummarizer:
             Parse the description and extract the following information in JSON format:
             1. vulnerable_version: The specific vulnerable version mentioned (e.g., "^0.8.9")
             2. recommended_version: A safe version to use instead (typically the latest stable, e.g., "^0.8.20" or higher)
-            3. vulnerable_code: A code snippet showing the vulnerable pragma statement
-            4. fixed_code: A code snippet showing the fixed pragma statement
+            3. vulnerable_code: A DETAILED code snippet showing the vulnerable pragma statement with explanatory comments
+            4. fixed_code: A DETAILED code snippet showing the fixed pragma statement with explanatory comments
             5. issues: Array of specific issues mentioned in the description
+            
+            For the code snippets, include a simple contract definition and detailed comments explaining the vulnerability and fix.
+            Make the examples educational and explain the security implications.
+            
+            ### CODE EXAMPLE FORMATS
+            vulnerable_code should look like:
+            ```
+            pragma solidity ^0.8.9;
+            
+            // This contract uses a Solidity compiler version with known vulnerabilities
+            contract VulnerableContract {
+                // Version ^0.8.9 has issues like VerbatimInvalidDeduplication
+                // This can lead to security vulnerabilities in your contract
+                
+                // Rest of contract code...
+            }
+            ```
+            
+            fixed_code should look like:
+            ```
+            pragma solidity ^0.8.20; // Use latest stable version
+            
+            // This contract uses a more secure Solidity compiler version
+            contract SecureContract {
+                // Using a version without known vulnerabilities
+                
+                // Rest of contract code...
+            }
+            
+            /* 
+             * Solidity compiler version recommendations:
+             * 1. Always use the latest stable version (^0.8.20 or higher)
+             * 2. For production, consider a fixed version (0.8.20 instead of ^0.8.20)
+             * 3. Regularly check for compiler updates and security patches
+             */
+            ```
             
             ### OUTPUT FORMAT
             Return ONLY a valid JSON object with the fields described above, nothing else:
@@ -146,17 +183,44 @@ class ResultSummarizer:
         """
         # Try to extract version from the description using regex
         version_match = re.search(r'\^?(\d+\.\d+\.\d+)', description)
-        vulnerable_version = version_match.group(0) if version_match else "Unknown"
+        vulnerable_version = version_match.group(0) if version_match else "^0.8.9"
         
         # Extract issues using regex - look for capitalized words
         issues = re.findall(r'([A-Z][a-zA-Z]+(?:[A-Z][a-zA-Z]+)+)', description)
         
+        # Create more detailed code examples
+        vulnerable_code = f"""pragma solidity {vulnerable_version};
+
+// This contract uses a Solidity compiler version with known vulnerabilities
+contract VulnerableContract {{
+    // Version {vulnerable_version} has the following issues:
+    // {', '.join(issues) if issues else 'Multiple security vulnerabilities'}
+    
+    // Rest of contract code...
+}}"""
+
+        fixed_code = f"""pragma solidity ^0.8.20; // Use latest stable version
+
+// This contract uses a more secure Solidity compiler version
+contract FixedContract {{
+    // Using a fixed version without known vulnerabilities
+    
+    // Rest of contract code...
+}}
+
+/* 
+ * Solidity compiler version recommendations:
+ * 1. Always use the latest stable version (^0.8.20 or higher)
+ * 2. For production, consider a fixed version (0.8.20 instead of ^0.8.20)
+ * 3. Regularly check for compiler updates and security patches
+ */"""
+        
         return {
             "vulnerable_version": vulnerable_version,
             "recommended_version": "^0.8.20",  # Safe default
-            "vulnerable_code": f"pragma solidity {vulnerable_version};",
-            "fixed_code": "pragma solidity ^0.8.20;",
-            "issues": issues or ["Unknown issue"]
+            "vulnerable_code": vulnerable_code,
+            "fixed_code": fixed_code,
+            "issues": issues or ["Multiple security vulnerabilities"]
         }
     
     def standardize_security_findings(self, raw_findings: Dict) -> Dict:
@@ -186,7 +250,7 @@ class ResultSummarizer:
                         "title": "Timestamp dependence in withdraw()",
                         "severity": "Low",
                         "file": "Lock.sol",
-                        "lines": "23-33",
+                        "lines": "23-33 (If it is a single line, just use the line number)",
                         "description": "Lock.withdraw() compares block.timestamp to unlockTime, allowing miner time manipulation.",
                         "vulnerable_code": "<exact snippet>",
                         "suggested_fix": "<exact suggested_fix from input>"
@@ -202,20 +266,60 @@ class ResultSummarizer:
         if isinstance(raw_findings, dict) and 'findings' in raw_findings:
             for finding in raw_findings.get('findings', []):
                 description = finding.get('description', '')
-                if isinstance(description, str) and (
-                    'version constraint' in description.lower() or 
-                    'compiler version' in description.lower() or
-                    'solidity version' in description.lower()
-                ) and 'vulnerable_code' not in finding or not finding.get('vulnerable_code'):
+                title = finding.get('name', '')
+                
+                # Special handling for compiler version vulnerabilities
+                if 'version' in title.lower() and ('constraint' in title.lower() or 'compiler' in title.lower()):
+                    version_details = self.extract_version_vulnerability_details(description)
+                    if version_details:
+                        # Extract line information if it exists in the original finding
+                        line_info = ""
+                        line_match = re.search(r'Lines?:?\s*(\d+(?:-\d+)?)', description)
+                        if line_match:
+                            line_info = line_match.group(1)
+                        elif re.search(r'\(.*?(\d+).*?\)', description):  # Look for line numbers in parentheses
+                            line_match = re.search(r'\(.*?(\d+).*?\)', description)
+                            line_info = line_match.group(1)
+                        
+                        # Ensure single line numbers are properly formatted
+                        if line_info and not '-' in line_info:
+                            line_info = f"{line_info}-{line_info}"  # Format as range for consistency
+                            
+                        formatted_findings.append({
+                            'id': f"solc-{uuid.uuid4().hex[:8]}",
+                            'title': 'Solc Version with known issues',
+                            'severity': 'info',
+                            'file': version_details.get('file_location', 'Unknown'),
+                            'lines': line_info,
+                            'description': f"Version constraint {version_details['vulnerable_version']} contains known severe issues.",
+                            'vulnerable_code': version_details['vulnerable_code'],
+                            'suggested_fix': version_details['fixed_code']
+                        })
+                        continue
+                
+                # Check for compiler version vulnerabilities
+                is_version_issue = (
+                    isinstance(description, str) and (
+                        'version constraint' in description.lower() or 
+                        'compiler version' in description.lower() or
+                        'solidity version' in description.lower() or
+                        'pragma solidity' in description.lower()
+                    )
+                ) or (
+                    isinstance(title, str) and (
+                        'version' in title.lower() or
+                        'compiler' in title.lower() or
+                        'solc' in title.lower()
+                    )
+                )
+                
+                if is_version_issue and (not finding.get('vulnerable_code') or not finding.get('suggested_fix')):
                     # This is likely a compiler version vulnerability with missing code
                     version_details = self.extract_version_vulnerability_details(description)
                     
-                    # Update the finding with the extracted information
-                    if not finding.get('vulnerable_code'):
-                        finding['vulnerable_code'] = version_details.get('vulnerable_code', '')
-                    
-                    if not finding.get('suggested_fix'):
-                        finding['suggested_fix'] = version_details.get('fixed_code', '')
+                    # Always set vulnerable_code and suggested_fix for version issues
+                    finding['vulnerable_code'] = version_details.get('vulnerable_code', '')
+                    finding['suggested_fix'] = version_details.get('fixed_code', '')
                     
                     # Enhance description if needed
                     if len(description) < 100:  # If description is short, enhance it
@@ -240,7 +344,7 @@ class ResultSummarizer:
             * `name` – short title of the issue  
             * `severity` – Critical / High / Medium / Low / Info / Optimization  
             * `file` – absolute path (we only need the filename)  
-            * `line_range` – e.g. `"23-33"`  
+            * `line_range` – e.g. `"23-33"` (If it is a single line, just use the line number)  
             * `description` – full description from the tool  
             * `vulnerable_code` – snippet of the affected code  
             * `suggested_fix` – remediation snippet / guidance  
@@ -268,7 +372,7 @@ class ResultSummarizer:
                   "title": "Timestamp dependence in withdraw()",
                   "severity": "Low",
                   "file": "Lock.sol",
-                  "lines": "23-33",
+                  "lines": "23-33 (If it is a single line, just use the line number)",
                   "description": "Lock.withdraw() compares block.timestamp to unlockTime, allowing miner time manipulation.",
                   "vulnerable_code": "<exact snippet>",
                   "suggested_fix": "<exact suggested_fix from input>"

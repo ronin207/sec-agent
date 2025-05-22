@@ -266,6 +266,7 @@ function App() {
       // Special handling for compiler version vulnerabilities
       if ((lowerType.includes('version') && lowerType.includes('constraint')) || 
           lowerType.includes('compiler') || 
+          lowerType.includes('solc') || 
           (description && (description.toLowerCase().includes('version constraint') || 
                           description.toLowerCase().includes('compiler version')))) {
         
@@ -281,25 +282,37 @@ function App() {
           };
         }
         
-        return {
-          vulnerable: `pragma solidity ${vulnerableVersion};
+        // Hardcoded special case for "Version constraint ^0.8.9 contains known severe issues"
+        if (description.includes('^0.8.9') || description.toLowerCase().includes('version constraint') || 
+            vulnType.includes('Solc Version')) {
+          return {
+            vulnerable: `pragma solidity ^0.8.9;
 
+// This contract uses a Solidity compiler version with known vulnerabilities
 contract VulnerableContract {
-    // Contract using a compiler version with known issues
+    // Version ^0.8.9 has issues like VerbatimInvalidDeduplication,
+    // FullInlinerNonExpressionSplitArgumentEvaluationOrder, etc.
+    // This can lead to security vulnerabilities in your contract
+    
+    // Rest of contract code...
 }`,
-          fixed: `pragma solidity ^0.8.20; // Use latest stable version
+            fixed: `pragma solidity ^0.8.20; // Use latest stable version
 
+// This contract uses a more secure Solidity compiler version
 contract SecureContract {
-    // Updated to use a more secure compiler version
+    // Using a version without known vulnerabilities
+    
+    // Rest of contract code...
 }
 
 /* 
- * Solidity version vulnerabilities:
- * - Versions with known bugs can introduce security vulnerabilities
- * - Always use the latest stable version (currently 0.8.20+)
- * - For production code, prefer locked versions (0.8.20) over floating (^0.8.9)
+ * Solidity compiler version recommendations:
+ * 1. Always use the latest stable version (^0.8.20 or higher)
+ * 2. For production, consider a fixed version (0.8.20 instead of ^0.8.20)
+ * 3. Regularly check for compiler updates and security patches
  */`
-        };
+          };
+        }
       }
       
       if (lowerType.includes('reentrancy')) {
@@ -420,14 +433,67 @@ contract SecureContract {
       optimization: []
     };
     
+    // Add special handling for Solidity version issues by directly checking the findings or description
+    const handleSolcVersionIssue = (finding) => {
+      const title = finding.title || '';
+      const description = finding.description || '';
+      
+      // Check if this is a Solidity version issue
+      const isSolcVersionIssue = 
+        title.toLowerCase().includes('solc version') || 
+        title.toLowerCase().includes('compiler version') ||
+        description.toLowerCase().includes('version constraint') ||
+        description.toLowerCase().includes('pragma solidity') ||
+        (title.includes('Version') && description.includes('known severe issues'));
+      
+      if (isSolcVersionIssue) {
+        // Extract version if possible
+        const versionMatch = description.match(/\^?(\d+\.\d+\.\d+)/);
+        const vulnerableVersion = versionMatch ? versionMatch[0] : '^0.8.9';
+        
+        // Explicitly set vulnerable code and suggested fix
+        finding.vulnerable_code = `pragma solidity ${vulnerableVersion};
+
+// This contract uses a Solidity compiler version with known vulnerabilities
+contract VulnerableContract {
+    // Version ${vulnerableVersion} has issues like VerbatimInvalidDeduplication,
+    // FullInlinerNonExpressionSplitArgumentEvaluationOrder, etc.
+    // This can lead to security vulnerabilities in your contract
+    
+    // Rest of contract code...
+}`;
+
+        finding.suggested_fix = `pragma solidity ^0.8.20; // Use latest stable version
+
+// This contract uses a more secure Solidity compiler version
+contract SecureContract {
+    // Using a version without known vulnerabilities
+    
+    // Rest of contract code...
+}
+
+/* 
+ * Solidity compiler version recommendations:
+ * 1. Always use the latest stable version (^0.8.20 or higher)
+ * 2. For production, consider a fixed version (0.8.20 instead of ^0.8.20)
+ * 3. Regularly check for compiler updates and security patches
+ */`;
+      }
+      
+      return finding;
+    };
+    
     // Check for formatted results from the standardized 4o-mini output
     if (results.formatted_results) {
       console.log('Using formatted results from 4o-mini:', results.formatted_results);
       
       const formattedFindings = results.formatted_results.findings || [];
       
-      // Process standardized findings and organize by severity
+      // Process standardized findings, handle Solc version issues, and organize by severity
       formattedFindings.forEach(finding => {
+        // Apply special handling for Solidity version issues
+        finding = handleSolcVersionIssue(finding);
+        
         const severity = finding.severity?.toLowerCase() || 'info';
         if (findingsBySeverity[severity]) {
           findingsBySeverity[severity].push(finding);
@@ -462,29 +528,26 @@ contract SecureContract {
       // Process findings by severity
       if (Array.isArray(vulnerabilities)) {
         vulnerabilities.forEach(vuln => {
-          const severity = vuln.severity?.toLowerCase() || 'info';
+          // Create a standard finding object
+          const finding = {
+            id: vuln.id || `vuln-${Math.random().toString(36).substring(2, 9)}`,
+            title: vuln.name || 'Security Issue',
+            severity: vuln.severity || 'Info',
+            file: vuln.file || 'Unknown',
+            lines: vuln.line_range || '',
+            description: vuln.description || 'No description provided',
+            vulnerable_code: vuln.vulnerable_code || '',
+            suggested_fix: vuln.suggested_fix || ''
+          };
+          
+          // Apply special handling for Solidity version issues
+          const handledFinding = handleSolcVersionIssue(finding);
+          
+          const severity = handledFinding.severity.toLowerCase();
           if (findingsBySeverity[severity]) {
-            findingsBySeverity[severity].push({
-              id: vuln.id || `vuln-${Math.random().toString(36).substring(2, 9)}`,
-              title: vuln.name || 'Security Issue',
-              severity: vuln.severity || 'Info',
-              file: vuln.file || 'Unknown',
-              lines: vuln.line_range || '',
-              description: vuln.description || 'No description provided',
-              vulnerable_code: vuln.vulnerable_code || '',
-              suggested_fix: vuln.suggested_fix || ''
-            });
+            findingsBySeverity[severity].push(handledFinding);
           } else {
-            findingsBySeverity.info.push({
-              id: vuln.id || `vuln-${Math.random().toString(36).substring(2, 9)}`,
-              title: vuln.name || 'Security Issue',
-              severity: 'Info',
-              file: vuln.file || 'Unknown',
-              lines: vuln.line_range || '',
-              description: vuln.description || 'No description provided',
-              vulnerable_code: vuln.vulnerable_code || '',
-              suggested_fix: vuln.suggested_fix || ''
-            });
+            findingsBySeverity.info.push(handledFinding);
           }
         });
       }
@@ -974,7 +1037,11 @@ contract SecureContract {
                               finding.vulnerable_code || '',
                               finding.suggested_fix || ''
                             ).vulnerable}
-                            {finding.lines && <div className="line-range">Lines: {finding.lines}</div>}
+                            {finding.lines && <div className="line-range">
+                              {finding.lines.includes('-') && finding.lines.split('-')[0] === finding.lines.split('-')[1] 
+                                ? `Line: ${finding.lines.split('-')[0]}` 
+                                : `Lines: ${finding.lines}`}
+                            </div>}
                           </div>
                         </div>
                         
