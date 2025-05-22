@@ -21,6 +21,9 @@ from backend.core.tool_selector import SecurityToolSelector
 from backend.core.scan_executor import ScanExecutor
 from backend.core.result_aggregator import ResultAggregator
 from backend.core.result_summarizer import ResultSummarizer
+from backend.core.ai_audit_analyzer import AIAuditAnalyzer
+
+# Import helpers
 from backend.utils.helpers import get_logger
 
 # Get logger
@@ -35,16 +38,16 @@ class SecurityAgent:
     """
     Main Security Agent class that orchestrates the entire vulnerability assessment process.
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize the Security Agent with all necessary components.
-        
+
         Args:
             api_key: OpenAI API key (falls back to environment variable)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        
+
         # Initialize all components
         self.input_handler = InputHandler()
         self.cve_knowledge_query = CVEKnowledgeQuery(api_key=self.api_key)
@@ -62,7 +65,7 @@ class SecurityAgent:
     def run(self, user_input: Union[str, List[str]], output_format: str = "json", recursive: bool = False) -> Dict:
         """
         Run the security agent on the provided input.
-        
+
         Args:
             user_input: Either a website URL, Solidity contract file/URL, directory, or GitHub repository URL.
                         Can also be a list of files to scan.
@@ -178,7 +181,8 @@ class SecurityAgent:
             logger.info("Aggregating scan results")
             aggregated_results = self.result_aggregator.aggregate_results(
                 scan_results,
-                cve_info
+                cve_info,
+                ai_analysis_findings
             )
             
             # Log deduplication stats
@@ -200,17 +204,17 @@ class SecurityAgent:
             # Step 6: Generate summary
             logger.info("Generating result summary")
             summary = self.result_summarizer.generate_summary(aggregated_results)
-            
+
             # Combine all results
             results['summary'] = summary
             results['status'] = 'completed'
-            
+
             # Format output based on requested format
             if output_format.lower() == "markdown":
                 results['formatted_output'] = self.result_aggregator.export_to_markdown(aggregated_results)
             else:
                 results['formatted_output'] = self.result_aggregator.export_to_json(aggregated_results)
-            
+
         except Exception as e:
             logger.error(f"Error in SecurityAgent.run: {str(e)}")
             results['status'] = 'error'
@@ -262,22 +266,22 @@ class SecurityAgent:
     def quick_scan(self, url: str) -> Dict:
         """
         Convenience method for quick website security scanning.
-        
+
         Args:
             url: Website URL to scan
-            
+
         Returns:
             Dictionary containing scan summary
         """
         results = self.run(url)
-        
+
         if results.get('status') == 'error':
             return {
                 "status": "error",
                 "error": results.get('error'),
                 "url": url
             }
-        
+
         # Extract just the summary for quick results
         return {
             "status": "success",

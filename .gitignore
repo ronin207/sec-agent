@@ -31,9 +31,7 @@ coverage/
 *.coverage
 
 # Data directory with sensitive information and large files
-data/
-data/chroma/
-data/sources/
+*.pdf
 
 # Miscellaneous
 *.bak
@@ -55,6 +53,7 @@ build/
 
 # Virtual environments
 venv/
+.venv/
 env/
 ENV/
 
@@ -72,13 +71,9 @@ logs/
 *.log
 
 # Data directories
-data/
 chroma/
 
 # Output files
-*.json
-!package.json
-!package-lock.json
 *.md
 !README.md
 

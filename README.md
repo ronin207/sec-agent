@@ -47,11 +47,11 @@ flowchart TD
     %% Entry Points
     User((User)) --> Demo[demo.py]
     User --> Main[main.py]
-    
+
     %% Main Components
     Main --> SecurityAgent
     Demo --> SecurityAgent
-    
+
     %% Core modules
     subgraph BackendCore[Backend Core]
         SecurityAgent[SecurityAgent]
@@ -62,7 +62,7 @@ flowchart TD
         ResultAggregator[ResultAggregator]
         ResultSummarizer[ResultSummarizer]
     end
-    
+
     %% Connections between core components
     SecurityAgent --> InputHandler
     SecurityAgent --> CVEKnowledgeBase
@@ -70,25 +70,25 @@ flowchart TD
     SecurityAgent --> ScanExecutor
     SecurityAgent --> ResultAggregator
     SecurityAgent --> ResultSummarizer
-    
+
     %% Data flow
     InputHandler --> CVEKnowledgeBase
     CVEKnowledgeBase --> ToolSelector
     ToolSelector --> ScanExecutor
     ScanExecutor --> ResultAggregator
     ResultAggregator --> ResultSummarizer
-    
+
     %% Utilities
     subgraph BackendUtils[Backend Utils]
         CVELoader[CVE Loader]
         Helpers[Helper Utilities]
     end
-    
+
     %% External Services
     OpenAI[OpenAI API]
     OpenAI -.-> CVEKnowledgeBase
     OpenAI -.-> ResultSummarizer
-    
+
     %% Tool execution - simulated in demo
     subgraph WebTools[Web Tools]
         ZAP[OWASP ZAP]
@@ -96,13 +96,13 @@ flowchart TD
         Wappalyzer[Wappalyzer]
         Nuclei[Nuclei]
     end
-    
+
     subgraph SmartContractTools[Smart Contract Tools]
         Slither[Slither]
         Mythril[Mythril]
         Solhint[Solhint]
     end
-    
+
     %% Connect executor to individual tools
     ScanExecutor --> ZAP
     ScanExecutor --> Nikto
@@ -111,23 +111,23 @@ flowchart TD
     ScanExecutor --> Slither
     ScanExecutor --> Mythril
     ScanExecutor --> Solhint
-    
+
     %% Connection to utilities
     CVEKnowledgeBase --> CVELoader
     BackendCore --> Helpers
-    
+
     %% Result flow
     ResultSummarizer --> User
-    
+
     %% Output formats
     ResultSummarizer --> OutputFile[(Output File)]
-    
+
     %% Styling
     classDef core fill:#f9f,stroke:#333,stroke-width:2px;
     classDef utils fill:#bbf,stroke:#333,stroke-width:1px;
     classDef external fill:#bfb,stroke:#333,stroke-width:1px;
     classDef entry fill:#fbb,stroke:#333,stroke-width:2px;
-    
+
     class SecurityAgent,InputHandler,CVEKnowledgeBase,ToolSelector,ScanExecutor,ResultAggregator,ResultSummarizer core;
     class CVELoader,Helpers utils;
     class OpenAI external;
@@ -308,6 +308,22 @@ In the current demo version, security tool execution is simulated. In a producti
 - Python 3.8+
 - OpenAI API key (GPT-4 or GPT-4o-mini recommended)
 - Python packages listed in requirements.txt
+
+## Audit Report Processing
+
+To process audit reports and create the necessary index file, follow these simple steps:
+
+1. Place your PDF audit reports in the directory:
+   ```
+   cp /path/to/your/audit/reports/*.pdf security_agent/data/sources/audit_reports/
+   ```
+
+2. Run the audit report processing script:
+   ```
+   python scripts/extract_findings_from_pdfs.py
+   ```
+
+The script will automatically extract findings from all PDF reports and create an index.json file that the AI analyzer will use for enhanced vulnerability detection.
 
 ## Web Interface
 
