@@ -1743,3 +1743,195 @@ body {
   display: flex;
   align-items: center;
 }
+
+/* Add styles for the findings statistics */
+.findings-statistics {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-color);
+}
+
+.findings-statistics h5 {
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.severity-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  min-width: 80px;
+  border: 1px solid var(--border-color);
+}
+
+.stat-item .stat-count {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.stat-item .stat-label {
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+/* Style stat items by severity */
+.stat-item.critical {
+  background-color: rgba(var(--gemini-severity-high-color-rgb), 0.1);
+  border-color: rgba(var(--gemini-severity-high-color-rgb), 0.3);
+}
+
+.stat-item.critical .stat-count {
+  color: var(--gemini-severity-high-color);
+}
+
+.stat-item.high {
+  background-color: rgba(var(--gemini-severity-high-color-rgb), 0.1);
+  border-color: rgba(var(--gemini-severity-high-color-rgb), 0.3);
+}
+
+.stat-item.high .stat-count {
+  color: var(--gemini-severity-high-color);
+}
+
+.stat-item.medium {
+  background-color: rgba(var(--gemini-severity-medium-color-rgb), 0.1);
+  border-color: rgba(var(--gemini-severity-medium-color-rgb), 0.3);
+}
+
+.stat-item.medium .stat-count {
+  color: var(--gemini-severity-medium-color);
+}
+
+.stat-item.low {
+  background-color: rgba(var(--gemini-severity-low-color-rgb), 0.1);
+  border-color: rgba(var(--gemini-severity-low-color-rgb), 0.3);
+}
+
+.stat-item.low .stat-count {
+  color: var(--gemini-severity-low-color);
+}
+
+.stat-item.info {
+  background-color: rgba(var(--gemini-severity-info-color-rgb), 0.1);
+  border-color: rgba(var(--gemini-severity-info-color-rgb), 0.3);
+}
+
+.stat-item.info .stat-count {
+  color: var(--gemini-severity-info-color);
+}
+
+.stat-item.optimization {
+  background-color: rgba(138, 180, 248, 0.1);
+  border-color: rgba(138, 180, 248, 0.3);
+}
+
+.stat-item.optimization .stat-count {
+  color: #8ab4f8;
+}
+
+/* Top findings card */
+.top-findings-card {
+  margin-top: 20px;
+}
+
+.top-findings-card h4 {
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.top-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-finding-item {
+  padding: 12px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--border-color);
+}
+
+.top-finding-item .finding-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.top-finding-item .severity-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.top-finding-item h5 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.top-finding-item .finding-description {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--chatgpt-text-secondary);
+}
+
+.top-finding-item .finding-location {
+  font-size: 12px;
+  color: var(--chatgpt-text-secondary);
+}
+
+/* Critical severity */
+.top-finding-item .severity-indicator.critical,
+.severity-indicator.critical {
+  background-color: var(--gemini-severity-high-color);
+}
+
+.top-finding-item.critical {
+  border-left-color: var(--gemini-severity-high-color);
+}
+
+/* More findings button */
+.more-findings {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.more-findings-btn {
+  background-color: transparent;
+  color: var(--gemini-accent-color);
+  border: 1px solid var(--gemini-accent-color);
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.more-findings-btn:hover {
+  background-color: rgba(var(--gemini-accent-color-rgb), 0.1);
+}
+
+/* No summary card */
+.no-summary-card {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  text-align: center;
+  color: var(--chatgpt-text-secondary);
+}

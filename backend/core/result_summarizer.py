@@ -5,6 +5,7 @@ Generates human-readable summaries of security scan results using OpenAI API.
 from typing import Dict, List, Optional, Any, Union
 import os
 import json
+import re
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -31,6 +32,11 @@ class StandardizedToolOutput(BaseModel):
     findings_by_severity: Dict = Field(description="Count of findings by severity")
     summary: str = Field(description="Brief summary of the scan results")
 
+class SecurityFindingsOutput(BaseModel):
+    """Schema for security findings standardized output"""
+    summary: Dict = Field(description="Summary information including totals and counts by severity")
+    findings: List[Dict] = Field(description="List of formatted security findings")
+
 class ResultSummarizer:
     """
     Generates human-readable summaries of security scan results using OpenAI API.
@@ -48,6 +54,361 @@ class ResultSummarizer:
         logger.info(f"Initializing ResultSummarizer with API key: {'Set' if self.api_key else 'Not set'}")
         self.model_name = model_name
         self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
+    
+    def extract_version_vulnerability_details(self, description: str) -> Dict[str, str]:
+        """
+        Extract specific details about compiler version vulnerabilities using GPT-4o-mini.
+        
+        Args:
+            description: The vulnerability description containing version information
+            
+        Returns:
+            Dictionary with extracted version details:
+            {
+                "vulnerable_version": "^0.8.9",
+                "recommended_version": "^0.8.20",
+                "vulnerable_code": "pragma solidity ^0.8.9;",
+                "fixed_code": "pragma solidity ^0.8.20;",
+                "issues": ["VerbatimInvalidDeduplication", "FullInlinerNonExpressionSplitArgumentEvaluationOrder", ...]
+            }
+        """
+        logger.info(f"Extracting version vulnerability details using {self.model_name}")
+        
+        # Create a prompt template for extracting version details
+        prompt = ChatPromptTemplate.from_template(
+            """
+            ### TASK
+            You are a smart contract security expert. Extract details from the following vulnerability description about Solidity compiler version issues.
+            
+            ### VULNERABILITY DESCRIPTION
+            {description}
+            
+            ### INSTRUCTIONS
+            Parse the description and extract the following information in JSON format:
+            1. vulnerable_version: The specific vulnerable version mentioned (e.g., "^0.8.9")
+            2. recommended_version: A safe version to use instead (typically the latest stable, e.g., "^0.8.20" or higher)
+            3. vulnerable_code: A code snippet showing the vulnerable pragma statement
+            4. fixed_code: A code snippet showing the fixed pragma statement
+            5. issues: Array of specific issues mentioned in the description
+            
+            ### OUTPUT FORMAT
+            Return ONLY a valid JSON object with the fields described above, nothing else:
+            ```json
+            {
+              "vulnerable_version": "...",
+              "recommended_version": "...",
+              "vulnerable_code": "...",
+              "fixed_code": "...",
+              "issues": [...]
+            }
+            ```
+            """
+        )
+        
+        try:
+            # Format the prompt with the description
+            formatted_prompt = prompt.format(description=description)
+            
+            logger.info("🚀 Calling OpenAI API to extract version vulnerability details - START")
+            response = self.llm.invoke(formatted_prompt)
+            logger.info("🚀 Calling OpenAI API to extract version vulnerability details - COMPLETE")
+            
+            # Extract the JSON response
+            content = response.content
+            if isinstance(content, str):
+                # Find JSON in the content if it's wrapped in text
+                start_idx = content.find('{')
+                end_idx = content.rfind('}') + 1
+                if start_idx >= 0 and end_idx > start_idx:
+                    json_str = content[start_idx:end_idx]
+                    extracted_details = json.loads(json_str)
+                    
+                    logger.info(f"✅ Successfully extracted version vulnerability details")
+                    return extracted_details
+            
+            # If we couldn't extract valid JSON, return a fallback
+            logger.warning(f"⚠️ Could not extract valid JSON from OpenAI API response")
+            return self._get_fallback_version_details(description)
+            
+        except Exception as e:
+            logger.error(f"❌ Error extracting version vulnerability details: {str(e)}")
+            return self._get_fallback_version_details(description)
+    
+    def _get_fallback_version_details(self, description: str) -> Dict[str, str]:
+        """
+        Generate fallback version vulnerability details if the API call fails.
+        
+        Args:
+            description: The vulnerability description
+            
+        Returns:
+            Basic version vulnerability details
+        """
+        # Try to extract version from the description using regex
+        version_match = re.search(r'\^?(\d+\.\d+\.\d+)', description)
+        vulnerable_version = version_match.group(0) if version_match else "Unknown"
+        
+        # Extract issues using regex - look for capitalized words
+        issues = re.findall(r'([A-Z][a-zA-Z]+(?:[A-Z][a-zA-Z]+)+)', description)
+        
+        return {
+            "vulnerable_version": vulnerable_version,
+            "recommended_version": "^0.8.20",  # Safe default
+            "vulnerable_code": f"pragma solidity {vulnerable_version};",
+            "fixed_code": "pragma solidity ^0.8.20;",
+            "issues": issues or ["Unknown issue"]
+        }
+    
+    def standardize_security_findings(self, raw_findings: Dict) -> Dict:
+        """
+        Process security tool outputs using 4o-mini model and standardize to the required format.
+        
+        Args:
+            raw_findings: The raw security findings JSON from security tools
+            
+        Returns:
+            Dictionary with standardized format:
+            {
+                "summary": {
+                    "total_findings": <int>,
+                    "by_severity": {
+                        "critical": <int>,
+                        "high": <int>,
+                        "medium": <int>,
+                        "low": <int>,
+                        "info": <int>,
+                        "optimization": <int>
+                    }
+                },
+                "findings": [
+                    {
+                        "id": "slither-timestamp-1",
+                        "title": "Timestamp dependence in withdraw()",
+                        "severity": "Low",
+                        "file": "Lock.sol",
+                        "lines": "23-33",
+                        "description": "Lock.withdraw() compares block.timestamp to unlockTime, allowing miner time manipulation.",
+                        "vulnerable_code": "<exact snippet>",
+                        "suggested_fix": "<exact suggested_fix from input>"
+                    },
+                    ...
+                ]
+            }
+        """
+        logger.info(f"Standardizing security findings using {self.model_name}")
+
+        # Process the raw findings before sending to the model
+        # Check for compiler version vulnerabilities
+        if isinstance(raw_findings, dict) and 'findings' in raw_findings:
+            for finding in raw_findings.get('findings', []):
+                description = finding.get('description', '')
+                if isinstance(description, str) and (
+                    'version constraint' in description.lower() or 
+                    'compiler version' in description.lower() or
+                    'solidity version' in description.lower()
+                ) and 'vulnerable_code' not in finding or not finding.get('vulnerable_code'):
+                    # This is likely a compiler version vulnerability with missing code
+                    version_details = self.extract_version_vulnerability_details(description)
+                    
+                    # Update the finding with the extracted information
+                    if not finding.get('vulnerable_code'):
+                        finding['vulnerable_code'] = version_details.get('vulnerable_code', '')
+                    
+                    if not finding.get('suggested_fix'):
+                        finding['suggested_fix'] = version_details.get('fixed_code', '')
+                    
+                    # Enhance description if needed
+                    if len(description) < 100:  # If description is short, enhance it
+                        issues = version_details.get('issues', [])
+                        issues_str = ', '.join(issues) if issues else 'security issues'
+                        enhanced_desc = (
+                            f"Version {version_details.get('vulnerable_version', 'specified')} contains known "
+                            f"security issues: {issues_str}. Recommend upgrading to "
+                            f"{version_details.get('recommended_version', '^0.8.20')}."
+                        )
+                        finding['description'] = enhanced_desc
+
+        # Create a prompt template for standardizing the findings
+        prompt = ChatPromptTemplate.from_template(
+            """
+            ### CONTEXT
+            You are an assistant that prepares security-scan results for a web front-end.  
+            The scan report is a single JSON object generated by the Security-Agent tool-chain (Slither, Mythril, …).  
+            Each element inside `findings` already contains:
+            
+            * `id` – unique identifier  
+            * `name` – short title of the issue  
+            * `severity` – Critical / High / Medium / Low / Info / Optimization  
+            * `file` – absolute path (we only need the filename)  
+            * `line_range` – e.g. `"23-33"`  
+            * `description` – full description from the tool  
+            * `vulnerable_code` – snippet of the affected code  
+            * `suggested_fix` – remediation snippet / guidance  
+            
+            ### TASK
+            1. **Parse** the JSON raw findings I'll provide.
+            2. **Produce ONE new JSON object** with two top-level keys:
+            
+            ```json
+            {{
+              "summary": {{
+                "total_findings": <int>,
+                "by_severity": {{
+                  "critical": <int>,
+                  "high": <int>,
+                  "medium": <int>,
+                  "low": <int>,
+                  "info": <int>,
+                  "optimization": <int>
+                }}
+              }},
+              "findings": [
+                {{
+                  "id": "slither-timestamp-1",
+                  "title": "Timestamp dependence in withdraw()",
+                  "severity": "Low",
+                  "file": "Lock.sol",
+                  "lines": "23-33",
+                  "description": "Lock.withdraw() compares block.timestamp to unlockTime, allowing miner time manipulation.",
+                  "vulnerable_code": "<exact snippet>",
+                  "suggested_fix": "<exact suggested_fix from input>"
+                }},
+                …
+              ]
+            }}
+            ```
+            
+            For each finding:
+            1. Extract the basename from the file path
+            2. Create a clear, concise title based on the name and description
+            3. Use the existing severity, preserving its exact case (e.g., "Low" not "low")
+            4. Use line_range for the lines field
+            5. Keep the vulnerable_code and suggested_fix exactly as they appear in the input
+            
+            Return only the JSON object, nothing else.
+            
+            Raw findings JSON:
+            {raw_findings}
+            """
+        )
+
+        try:
+            # Convert raw_findings to a string if it's a dict
+            if isinstance(raw_findings, dict):
+                raw_findings_str = json.dumps(raw_findings)
+            else:
+                raw_findings_str = str(raw_findings)
+            
+            # Format the prompt with the raw findings
+            formatted_prompt = prompt.format(raw_findings=raw_findings_str[:32000])  # Limit size to avoid token limits
+            
+            logger.info("🚀 Calling OpenAI API to standardize security findings - START")
+            response = self.llm.invoke(formatted_prompt)
+            logger.info("🚀 Calling OpenAI API to standardize security findings - COMPLETE")
+            
+            # Extract the JSON response
+            content = response.content
+            if isinstance(content, str):
+                # Find JSON in the content if it's wrapped in text
+                start_idx = content.find('{')
+                end_idx = content.rfind('}') + 1
+                if start_idx >= 0 and end_idx > start_idx:
+                    json_str = content[start_idx:end_idx]
+                    standardized_findings = json.loads(json_str)
+                    
+                    # Add model info
+                    standardized_findings["model_used"] = self.model_name
+                    
+                    logger.info(f"✅ Successfully standardized security findings using {self.model_name}")
+                    return standardized_findings
+            
+            # If we couldn't extract valid JSON, return a fallback
+            logger.warning(f"⚠️ Could not extract valid JSON from OpenAI API response")
+            return self._get_fallback_findings(raw_findings)
+            
+        except Exception as e:
+            logger.error(f"❌ Error standardizing security findings: {str(e)}")
+            return self._get_fallback_findings(raw_findings)
+    
+    def _get_fallback_findings(self, raw_findings: Dict) -> Dict:
+        """
+        Generate fallback standardized findings if the API call fails.
+        
+        Args:
+            raw_findings: Raw security findings from tools
+            
+        Returns:
+            Basic standardized findings
+        """
+        try:
+            # Try to extract findings from raw_findings
+            findings = []
+            total_findings = 0
+            by_severity = {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "info": 0,
+                "optimization": 0
+            }
+            
+            if isinstance(raw_findings, dict) and 'findings' in raw_findings:
+                raw_findings_list = raw_findings.get('findings', [])
+                total_findings = len(raw_findings_list)
+                
+                for i, finding in enumerate(raw_findings_list):
+                    severity = finding.get('severity', 'Unknown')
+                    severity_lower = severity.lower()
+                    
+                    # Update severity counts
+                    if severity_lower in by_severity:
+                        by_severity[severity_lower] += 1
+                    
+                    # Extract filename from path
+                    file_path = finding.get('file', '')
+                    file_name = os.path.basename(file_path) if file_path else 'Unknown'
+                    
+                    # Create standardized finding
+                    findings.append({
+                        "id": finding.get('id', f"finding-{i+1}"),
+                        "title": finding.get('name', 'Unknown Issue'),
+                        "severity": severity,
+                        "file": file_name,
+                        "lines": finding.get('line_range', ''),
+                        "description": finding.get('description', ''),
+                        "vulnerable_code": finding.get('vulnerable_code', ''),
+                        "suggested_fix": finding.get('suggested_fix', '')
+                    })
+            
+            return {
+                "summary": {
+                    "total_findings": total_findings,
+                    "by_severity": by_severity
+                },
+                "findings": findings,
+                "model_used": self.model_name
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating fallback findings: {str(e)}")
+            
+            # Return minimal structure
+            return {
+                "summary": {
+                    "total_findings": 0,
+                    "by_severity": {
+                        "critical": 0,
+                        "high": 0,
+                        "medium": 0,
+                        "low": 0,
+                        "info": 0,
+                        "optimization": 0
+                    }
+                },
+                "findings": [],
+                "model_used": self.model_name
+            }
     
     def standardize_tool_output(self, tool_name: str, raw_output: str) -> Dict:
         """

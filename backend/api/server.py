@@ -71,13 +71,19 @@ def scan():
             token = data.get('token') or github_token
             output_format = data.get('output_format', 'json')
             
+            # Run the scan
             result = security_agent.scan_github_repo(
                 repo_url=repo_url,
                 output_format=output_format,
                 token=token
             )
             
-            # Add model info
+            # Standardize the security findings using 4o-mini
+            standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
+            
+            # Add model info and combine results
+            standardized_result["model_used"] = "gpt-4o-mini"
+            result["formatted_results"] = standardized_result
             result["model_used"] = "gpt-4o-mini"
             
             return jsonify(result)
@@ -96,7 +102,12 @@ def scan():
         # Run the scan
         result = security_agent.run(target, output_format=output_format, recursive=recursive)
         
-        # Add model info
+        # Standardize the security findings using 4o-mini
+        standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
+        
+        # Add model info and combine results
+        standardized_result["model_used"] = "gpt-4o-mini"
+        result["formatted_results"] = standardized_result
         result["model_used"] = "gpt-4o-mini"
         
         return jsonify(result)
@@ -138,7 +149,12 @@ def scan_github_repo():
             token=token
         )
         
-        # Add model info
+        # Standardize the security findings using 4o-mini
+        standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
+        
+        # Add model info and combine results
+        standardized_result["model_used"] = "gpt-4o-mini"
+        result["formatted_results"] = standardized_result
         result["model_used"] = "gpt-4o-mini"
         
         return jsonify(result)
@@ -176,7 +192,12 @@ def scan_files_endpoint():
         # Call security agent to scan files
         results = security_agent.scan_multiple(file_paths)
         
-        # Add model info
+        # Standardize the security findings using 4o-mini
+        standardized_result = result_summarizer.standardize_security_findings(results.get('aggregated_results', {}))
+        
+        # Add model info and combine results
+        standardized_result["model_used"] = "gpt-4o-mini"
+        results["formatted_results"] = standardized_result
         results["model_used"] = "gpt-4o-mini"
         
         # Clean up temp files
@@ -201,47 +222,41 @@ def status_endpoint():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """
-    Simple health check endpoint
-    """
-    return jsonify({'status': 'ok', 'model': 'gpt-4o-mini'})
+    """Health check endpoint"""
+    return jsonify({"status": "healthy", "model": "gpt-4o-mini"})
 
 @app.route('/api/set-github-token', methods=['POST'])
 def set_github_token():
-    """Set GitHub token for future API requests"""
-    data = request.json
-    
-    if not data or 'token' not in data:
-        return jsonify({
-            "status": "error",
-            "error": "Missing GitHub token"
-        }), 400
-    
-    token = data['token']
-    
-    # Validate token format (simple check)
-    if not token or not isinstance(token, str) or len(token) < 10:
-        return jsonify({
-            "status": "error",
-            "error": "Invalid GitHub token format"
-        }), 400
+    """Set GitHub token for API access"""
+    try:
+        data = request.json
+        if 'token' not in data:
+            return jsonify({
+                'error': 'Missing required parameter: token',
+                'status': 'error'
+            }), 400
         
-    # Set as environment variable for other components to use
-    os.environ["GITHUB_TOKEN"] = token
-    logger.info("GitHub token set successfully")
-    
-    return jsonify({
-        "status": "success",
-        "message": "GitHub token set successfully"
-    })
+        # Update the token in environment and global variable
+        token = data['token']
+        global github_token
+        github_token = token
+        os.environ["GITHUB_TOKEN"] = token
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'GitHub token updated successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error setting GitHub token: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
 
 def start_server(host='127.0.0.1', port=8080):
-    """Start the Flask server"""
+    """Start the API server"""
     print(f"Starting Security Agent API server on {host}:{port}")
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=API_DEBUG)
 
-if __name__ == "__main__":
-    # Initialize with sample data 
-    populate_sample_data(kb)
-    
-    start_server(host='0.0.0.0')
+if __name__ == '__main__':
+    start_server(host=API_HOST, port=API_PORT)

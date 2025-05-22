@@ -260,8 +260,47 @@ function App() {
     if (!results) return null;
     
     // Helper function to get default code suggestions based on vulnerability type
-    const getDefaultSuggestion = (vulnType) => {
+    const getDefaultSuggestion = (vulnType, description = '', vulnerableCode = '', suggestedFix = '') => {
       const lowerType = vulnType.toLowerCase();
+      
+      // Special handling for compiler version vulnerabilities
+      if ((lowerType.includes('version') && lowerType.includes('constraint')) || 
+          lowerType.includes('compiler') || 
+          (description && (description.toLowerCase().includes('version constraint') || 
+                          description.toLowerCase().includes('compiler version')))) {
+        
+        // Extract versions from text if available
+        const vulnerableVersionMatch = description.match(/\^?(\d+\.\d+\.\d+)/);
+        const vulnerableVersion = vulnerableVersionMatch ? vulnerableVersionMatch[0] : '0.8.9';
+        
+        // If we already have specific code from the backend, use that
+        if (vulnerableCode && suggestedFix) {
+          return {
+            vulnerable: vulnerableCode,
+            fixed: suggestedFix
+          };
+        }
+        
+        return {
+          vulnerable: `pragma solidity ${vulnerableVersion};
+
+contract VulnerableContract {
+    // Contract using a compiler version with known issues
+}`,
+          fixed: `pragma solidity ^0.8.20; // Use latest stable version
+
+contract SecureContract {
+    // Updated to use a more secure compiler version
+}
+
+/* 
+ * Solidity version vulnerabilities:
+ * - Versions with known bugs can introduce security vulnerabilities
+ * - Always use the latest stable version (currently 0.8.20+)
+ * - For production code, prefer locked versions (0.8.20) over floating (^0.8.9)
+ */`
+        };
+      }
       
       if (lowerType.includes('reentrancy')) {
         return {
@@ -371,74 +410,84 @@ contract SecureContract {
       };
     };
     
+    // Initialize findings by severity
     const findingsBySeverity = {
+      critical: [],
       high: [],
       medium: [],
       low: [],
-      info: []
+      info: [],
+      optimization: []
     };
     
-    // Extract vulnerabilities from the correct location in the response
-    // The backend puts them in aggregated_results or directly in findings
-    let vulnerabilities = [];
-    
-    // Check for findings in various locations in the response structure
-    if (results.aggregated_results && results.aggregated_results.findings) {
-      vulnerabilities = results.aggregated_results.findings;
-    } else if (results.findings) {
-      vulnerabilities = results.findings;
-    } else if (results.tool_results) {
-      // Extract findings from tool results if that's where they are
-      results.tool_results.forEach(toolResult => {
-        if (toolResult.findings && Array.isArray(toolResult.findings)) {
-          vulnerabilities = [...vulnerabilities, ...toolResult.findings];
-        }
-      });
-    } else if (results.vulnerabilities) {
-      // Fall back to the original location if somehow that's used
-      vulnerabilities = results.vulnerabilities;
-    }
-    
-    console.log('Extracted vulnerabilities:', vulnerabilities);
-    
-    // Process findings by severity
-    if (Array.isArray(vulnerabilities)) {
-      vulnerabilities.forEach(vuln => {
-        const severity = vuln.severity?.toLowerCase() || 'high';
-        if (findingsBySeverity[severity]) {
-          findingsBySeverity[severity].push(vuln);
-        } else {
-          findingsBySeverity.high.push(vuln);
-        }
-      });
-    } else if (results.aggregated_results && results.aggregated_results.findings_by_severity) {
-      // Handle case where backend provides findings already organized by severity
-      const findingsBySeverityObj = results.aggregated_results.findings_by_severity;
+    // Check for formatted results from the standardized 4o-mini output
+    if (results.formatted_results) {
+      console.log('Using formatted results from 4o-mini:', results.formatted_results);
       
-      // Get full findings details from appropriate place in response
-      const findingDetails = {};
-      if (results.aggregated_results.details && Array.isArray(results.aggregated_results.details)) {
-        results.aggregated_results.details.forEach(detail => {
-          if (detail.id) {
-            findingDetails[detail.id] = detail;
+      const formattedFindings = results.formatted_results.findings || [];
+      
+      // Process standardized findings and organize by severity
+      formattedFindings.forEach(finding => {
+        const severity = finding.severity?.toLowerCase() || 'info';
+        if (findingsBySeverity[severity]) {
+          findingsBySeverity[severity].push(finding);
+        } else {
+          // If the severity doesn't match any key, default to info
+          findingsBySeverity.info.push(finding);
+        }
+      });
+    } else {
+      // Fallback to the old extraction method
+      let vulnerabilities = [];
+      
+      // Check for findings in various locations in the response structure
+      if (results.aggregated_results && results.aggregated_results.findings) {
+        vulnerabilities = results.aggregated_results.findings;
+      } else if (results.findings) {
+        vulnerabilities = results.findings;
+      } else if (results.tool_results) {
+        // Extract findings from tool results if that's where they are
+        results.tool_results.forEach(toolResult => {
+          if (toolResult.findings && Array.isArray(toolResult.findings)) {
+            vulnerabilities = [...vulnerabilities, ...toolResult.findings];
+          }
+        });
+      } else if (results.vulnerabilities) {
+        // Fall back to the original location if somehow that's used
+        vulnerabilities = results.vulnerabilities;
+      }
+      
+      console.log('Extracted vulnerabilities using fallback method:', vulnerabilities);
+      
+      // Process findings by severity
+      if (Array.isArray(vulnerabilities)) {
+        vulnerabilities.forEach(vuln => {
+          const severity = vuln.severity?.toLowerCase() || 'info';
+          if (findingsBySeverity[severity]) {
+            findingsBySeverity[severity].push({
+              id: vuln.id || `vuln-${Math.random().toString(36).substring(2, 9)}`,
+              title: vuln.name || 'Security Issue',
+              severity: vuln.severity || 'Info',
+              file: vuln.file || 'Unknown',
+              lines: vuln.line_range || '',
+              description: vuln.description || 'No description provided',
+              vulnerable_code: vuln.vulnerable_code || '',
+              suggested_fix: vuln.suggested_fix || ''
+            });
+          } else {
+            findingsBySeverity.info.push({
+              id: vuln.id || `vuln-${Math.random().toString(36).substring(2, 9)}`,
+              title: vuln.name || 'Security Issue',
+              severity: 'Info',
+              file: vuln.file || 'Unknown',
+              lines: vuln.line_range || '',
+              description: vuln.description || 'No description provided',
+              vulnerable_code: vuln.vulnerable_code || '',
+              suggested_fix: vuln.suggested_fix || ''
+            });
           }
         });
       }
-      
-      // Process each severity level
-      Object.entries(findingsBySeverityObj).forEach(([severity, count]) => {
-        const lowercaseSeverity = severity.toLowerCase();
-        if (lowercaseSeverity in findingsBySeverity) {
-          // Create placeholder findings based on the count
-          for (let i = 0; i < count; i++) {
-            findingsBySeverity[lowercaseSeverity].push({
-              name: `${severity} Severity Issue`,
-              severity: severity,
-              description: `Security issue detected with ${severity} severity`
-            });
-          }
-        }
-      });
     }
     
     // Get total count of findings
@@ -448,24 +497,54 @@ contract SecureContract {
     
     // If the backend returns total findings but we couldn't extract them correctly,
     // use the backend's count
-    if (totalFindings === 0 && results.aggregated_results && results.aggregated_results.total_findings > 0) {
-      // Check if we have findings by severity from backend
-      if (results.aggregated_results.findings_by_severity) {
-        const findingsBySeverityFromBackend = results.aggregated_results.findings_by_severity;
+    if (totalFindings === 0) {
+      if (results.formatted_results && results.formatted_results.summary && results.formatted_results.summary.by_severity) {
+        // Use the standardized summary if available
+        const bySeverity = results.formatted_results.summary.by_severity;
         
-        // Create simple findings objects for each severity level
-        Object.entries(findingsBySeverityFromBackend).forEach(([severity, count]) => {
+        // Create placeholder findings for each severity level
+        Object.entries(bySeverity).forEach(([severity, count]) => {
           const lowercaseSeverity = severity.toLowerCase();
-          if (lowercaseSeverity in findingsBySeverity) {
+          if (lowercaseSeverity in findingsBySeverity && count > 0) {
             for (let i = 0; i < count; i++) {
               findingsBySeverity[lowercaseSeverity].push({
-                name: `${severity} Severity Issue`,
-                severity: severity,
-                description: `Security issue detected with ${severity} severity. See summary for details.`
+                id: `auto-${severity}-${i}`,
+                title: `${severity} Severity Issue`,
+                severity: severity.charAt(0).toUpperCase() + severity.slice(1),
+                file: 'Unknown',
+                lines: '',
+                description: `Security issue detected with ${severity} severity. See summary for details.`,
+                vulnerable_code: '',
+                suggested_fix: ''
               });
             }
           }
         });
+      } else if (results.aggregated_results && results.aggregated_results.total_findings > 0) {
+        // Fallback to old method
+        // Check if we have findings by severity from backend
+        if (results.aggregated_results.findings_by_severity) {
+          const findingsBySeverityFromBackend = results.aggregated_results.findings_by_severity;
+          
+          // Create simple findings objects for each severity level
+          Object.entries(findingsBySeverityFromBackend).forEach(([severity, count]) => {
+            const lowercaseSeverity = severity.toLowerCase();
+            if (lowercaseSeverity in findingsBySeverity) {
+              for (let i = 0; i < count; i++) {
+                findingsBySeverity[lowercaseSeverity].push({
+                  id: `auto-${severity}-${i}`,
+                  title: `${severity} Severity Issue`,
+                  severity: severity,
+                  file: 'Unknown',
+                  lines: '',
+                  description: `Security issue detected with ${severity} severity. See summary for details.`,
+                  vulnerable_code: '',
+                  suggested_fix: ''
+                });
+              }
+            }
+          });
+        }
       }
     }
     
@@ -512,55 +591,128 @@ contract SecureContract {
             </button>
           </div>
           
-          {/* Severity count badges - always visible */}
-          <div className="findings-summary-counts">
-            <div 
-              className={`severity-count high ${activeTab === 'issues' && activeSeverity === 'high' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('issues');
-                setActiveSeverity('high');
-              }}
-            >
-              <span className="count">{findingsBySeverity.high.length}</span>
-              <span className="label">High</span>
+          {/* Severity tabs (only show in Issues tab) */}
+          {activeTab === 'issues' && (
+            <div className="severity-tabs">
+              {Object.keys(findingsBySeverity).map(severity => (
+                findingsBySeverity[severity].length > 0 && (
+                  <button
+                    key={severity}
+                    className={`severity-tab ${activeSeverity === severity ? 'active' : ''} ${severity}`}
+                    onClick={() => setActiveSeverity(severity)}
+                  >
+                    <span className="severity-dot"></span>
+                    {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                    <span className="finding-count">{findingsBySeverity[severity].length}</span>
+                  </button>
+                )
+              ))}
             </div>
-            <div 
-              className={`severity-count medium ${activeTab === 'issues' && activeSeverity === 'medium' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('issues');
-                setActiveSeverity('medium');
-              }}
-            >
-              <span className="count">{findingsBySeverity.medium.length}</span>
-              <span className="label">Medium</span>
-            </div>
-            <div 
-              className={`severity-count low ${activeTab === 'issues' && activeSeverity === 'low' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('issues');
-                setActiveSeverity('low');
-              }}
-            >
-              <span className="count">{findingsBySeverity.low.length}</span>
-              <span className="label">Low</span>
-            </div>
-            <div 
-              className={`severity-count info ${activeTab === 'issues' && activeSeverity === 'info' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('issues');
-                setActiveSeverity('info');
-              }}
-            >
-              <span className="count">{findingsBySeverity.info.length}</span>
-              <span className="label">Info</span>
-            </div>
-          </div>
+          )}
         </div>
         
         {/* Conditional rendering based on active tab */}
         {activeTab === 'summary' && (
           <div className="tab-content">
-            {results.summary && (
+            {/* First check for the new formatted results */}
+            {results.formatted_results ? (
+              <div className="summary-container">
+                <div className="gemini-card summary-card">
+                  <div className="summary-header">
+                    <h4>Executive Summary</h4>
+                    <div className="summary-meta">
+                      {/* Determine risk level based on severity counts */}
+                      {(() => {
+                        const bySeverity = results.formatted_results.summary?.by_severity || {};
+                        let riskLevel = 'Low';
+                        
+                        if (bySeverity.critical > 0) {
+                          riskLevel = 'Critical';
+                        } else if (bySeverity.high > 0) {
+                          riskLevel = 'High';
+                        } else if (bySeverity.medium > 0) {
+                          riskLevel = 'Medium';
+                        }
+                        
+                        return (
+                          <div className={`risk-badge ${riskLevel.toLowerCase()}`}>
+                            {riskLevel} Risk
+                          </div>
+                        );
+                      })()}
+                      {results.formatted_results.model_used && (
+                        <div className="model-badge">
+                          Model: {results.formatted_results.model_used}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="summary-content">
+                    <p>Security scan completed with {results.formatted_results.summary?.total_findings || 0} findings.</p>
+                    
+                    {/* Summary Statistics */}
+                    {results.formatted_results.summary?.by_severity && (
+                      <div className="findings-statistics">
+                        <h5>Findings by Severity</h5>
+                        <div className="severity-stats">
+                          {Object.entries(results.formatted_results.summary.by_severity).map(([severity, count]) => 
+                            count > 0 ? (
+                              <div key={severity} className={`stat-item ${severity.toLowerCase()}`}>
+                                <div className="stat-count">{count}</div>
+                                <div className="stat-label">{severity.charAt(0).toUpperCase() + severity.slice(1)}</div>
+                              </div>
+                            ) : null
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Top Findings */}
+                {results.formatted_results.findings && results.formatted_results.findings.length > 0 && (
+                  <div className="gemini-card top-findings-card">
+                    <h4>Top Security Findings</h4>
+                    <div className="top-findings-list">
+                      {results.formatted_results.findings.slice(0, 5).map((finding, idx) => (
+                        <div key={idx} className="top-finding-item">
+                          <div className="finding-header">
+                            <div className={`severity-indicator ${finding.severity.toLowerCase()}`}></div>
+                            <h5>{finding.title || 'Security Issue'}</h5>
+                            <div className={`severity-badge ${finding.severity.toLowerCase()}`}>
+                              {finding.severity}
+                            </div>
+                          </div>
+                          <p className="finding-description">{finding.description}</p>
+                          {finding.file && (
+                            <div className="finding-location">
+                              <strong>File:</strong> {finding.file}
+                              {finding.lines && <span> (Lines: {finding.lines})</span>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {results.formatted_results.findings.length > 5 && (
+                        <div className="more-findings">
+                          <button 
+                            className="more-findings-btn"
+                            onClick={() => {
+                              setActiveTab('issues');
+                              setActiveSeverity('critical');
+                            }}
+                          >
+                            View all {results.formatted_results.findings.length} findings
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : results.summary ? (
+              // Fallback to the original summary format if available
               <div className="summary-container">
                 <div className="gemini-card summary-card">
                   <div className="summary-header">
@@ -716,6 +868,11 @@ contract SecureContract {
                   </div>
                 )}
               </div>
+            ) : (
+              // No summary available
+              <div className="gemini-card no-summary-card">
+                <p>No summary information available.</p>
+              </div>
             )}
           </div>
         )}
@@ -732,7 +889,7 @@ contract SecureContract {
                 {findingsBySeverity[activeSeverity].map((finding, idx) => (
                   <div key={idx} className="gemini-card finding-card">
                     <div className="finding-header">
-                      <h5>{finding.name || 'Security Vulnerability'}</h5>
+                      <h5>{finding.title || 'Security Vulnerability'}</h5>
                       <span className={`severity-badge ${activeSeverity}`}>
                         {activeSeverity.charAt(0).toUpperCase() + activeSeverity.slice(1)}
                       </span>
@@ -760,15 +917,25 @@ contract SecureContract {
                             <button 
                               className="copy-btn" 
                               onClick={() => navigator.clipboard.writeText(
-                                finding.vulnerable_code || getDefaultSuggestion(finding.name || '').vulnerable
+                                finding.vulnerable_code || getDefaultSuggestion(
+                                  finding.title || '',
+                                  finding.description || '',
+                                  finding.vulnerable_code || '',
+                                  finding.suggested_fix || ''
+                                ).vulnerable
                               )}
                             >
                               Copy
                             </button>
                           </div>
                           <div className="code-content">
-                            {finding.vulnerable_code || getDefaultSuggestion(finding.name || '').vulnerable}
-                            {finding.line_range && <div className="line-range">Lines: {finding.line_range}</div>}
+                            {finding.vulnerable_code || getDefaultSuggestion(
+                              finding.title || '',
+                              finding.description || '',
+                              finding.vulnerable_code || '',
+                              finding.suggested_fix || ''
+                            ).vulnerable}
+                            {finding.lines && <div className="line-range">Lines: {finding.lines}</div>}
                           </div>
                         </div>
                         
@@ -778,14 +945,24 @@ contract SecureContract {
                             <button 
                               className="copy-btn" 
                               onClick={() => navigator.clipboard.writeText(
-                                finding.suggested_fix || getDefaultSuggestion(finding.name || '').fixed
+                                finding.suggested_fix || getDefaultSuggestion(
+                                  finding.title || '',
+                                  finding.description || '',
+                                  finding.vulnerable_code || '',
+                                  finding.suggested_fix || ''
+                                ).fixed
                               )}
                             >
                               Copy
                             </button>
                           </div>
                           <div className="code-content">
-                            {finding.suggested_fix || getDefaultSuggestion(finding.name || '').fixed}
+                            {finding.suggested_fix || getDefaultSuggestion(
+                              finding.title || '',
+                              finding.description || '',
+                              finding.vulnerable_code || '',
+                              finding.suggested_fix || ''
+                            ).fixed}
                           </div>
                         </div>
                       </div>
