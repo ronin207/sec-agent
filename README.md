@@ -4,13 +4,16 @@ A Security AI Agent for automating vulnerability assessments for websites and sm
 
 ## Features
 
-- **Input Handling**: Accepts website URLs or Solidity smart contract code/repositories
+- **Input Handling**: Accepts website URLs, Solidity smart contract code/repositories, or multiple files
 - **CVE Knowledge Base**: Queries for known CVEs related to the target
 - **Tool Selection**: Dynamically selects appropriate security tools based on the target type
 - **Scan Execution**: Executes selected security tools against the target
 - **Result Aggregation**: Merges and deduplicates results from multiple tools
 - **Summary Generation**: Produces human-readable reports with remediation suggestions
 - **Detailed Logging**: View comprehensive logs of tool execution and scan results
+- **Multiple File Scanning**: Scan multiple files or entire directories at once
+- **GitHub Repository Support**: Directly scan code from GitHub repositories
+- **Web Interface**: User-friendly frontend for scanning and viewing results
 
 ## Project Structure
 
@@ -163,6 +166,18 @@ The main entry point provides several commands:
 # Run a security scan on a website or Solidity contract
 python main.py scan <target> [--format json|markdown] [--output-file results.json]
 
+# Scan multiple files/URLs at once
+python main.py scan file1.sol file2.sol file3.sol [--output-file results.json]
+
+# Scan a directory recursively
+python main.py scan src/ --recursive [--output-file results.json]
+
+# Scan a GitHub repository
+python main.py scan https://github.com/username/repository --repo [--output-file results.json]
+
+# Scan a private GitHub repository (requires authentication)
+python main.py scan https://github.com/username/repository --repo --token YOUR_GITHUB_TOKEN
+
 # Load CVE data into the knowledge base
 python main.py load-cve [--id CVE-ID] [--keyword search_term] [--smart-contracts]
 
@@ -175,11 +190,80 @@ python main.py run <url> [--sample-data]
 A friendly demo interface is provided for easy usage:
 
 ```
-# Basic usage
+# Basic usage - single target
 python demo.py <target> [--output results.json] [--format json|markdown]
+
+# Scan multiple files
+python demo.py file1.sol file2.sol file3.sol [--output results.json]
+
+# Scan a directory recursively
+python demo.py src/ --recursive [--output results.json]
+
+# Scan a GitHub repository
+python demo.py --repo https://github.com/username/repository [--output results.json]
 
 # With verbose logging enabled
 python demo.py <target> --verbose
+```
+
+#### Multiple File Scanning
+
+When scanning multiple files or repositories, the tool will:
+
+1. Analyze each file individually
+2. Aggregate findings across all files
+3. Generate a comprehensive report that includes:
+   - Per-file vulnerability counts
+   - Overall severity summary
+   - Consolidated remediation suggestions
+
+Example scanning multiple files:
+```
+python demo.py contract1.sol contract2.sol --output results.json
+```
+
+#### GitHub Repository Scanning
+
+You can scan a GitHub repository for security vulnerabilities by entering a GitHub URL in the frontend. This feature allows you to analyze Solidity smart contracts hosted on GitHub repositories.
+
+### Requirements
+
+1. Both the backend server and frontend application must be running locally.
+2. For private repositories or to avoid API rate limits, a GitHub Personal Access Token is recommended.
+
+### How to Use
+
+1. Start the backend server:
+   ```
+   cd /path/to/sec-agent
+   PORT=8080 GITHUB_TOKEN=your_github_token OPENAI_API_KEY=your_openai_key python -m api.server
+   ```
+
+2. Start the frontend:
+   ```
+   cd /path/to/sec-agent/frontend
+   npm start
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000`
+
+4. Enter a GitHub repository URL in the input field and click the submit button.
+
+5. Optionally, you can provide a GitHub token for scanning private repositories or to avoid rate limits.
+
+6. View the scan results organized by severity in the tabbed interface:
+   - Summary tab: Shows the executive summary and overall assessment
+   - Issues tab: Displays security issues categorized by severity (High, Medium, Low, Info)
+   - Debug tab: Shows raw response data for debugging
+
+For more detailed information about the GitHub scanning feature, please refer to [README-github-scanning.md](./README-github-scanning.md).
+
+#### Recursive Directory Scanning
+
+Scan all files in a directory structure:
+
+```
+python demo.py --recursive ./src
 ```
 
 #### Verbose Mode
@@ -240,3 +324,35 @@ To process audit reports and create the necessary index file, follow these simpl
    ```
 
 The script will automatically extract findings from all PDF reports and create an index.json file that the AI analyzer will use for enhanced vulnerability detection.
+
+## Web Interface
+
+The project includes a web-based frontend interface for easier interaction with the security agent:
+
+### Starting the Web Interface
+
+1. Start the backend server:
+   ```bash
+   cd /path/to/sec-agent
+   PORT=8080 GITHUB_TOKEN=your_github_token OPENAI_API_KEY=your_openai_key python -m api.server
+   ```
+
+2. Start the frontend development server:
+   ```bash
+   cd /path/to/sec-agent/frontend
+   npm start
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000`
+
+### Using the Web Interface
+
+The web interface allows you to:
+
+1. Input a GitHub repository URL or paste Solidity code directly
+2. View detailed security scan results in a user-friendly format
+3. See vulnerability findings with severity ratings and remediation suggestions
+
+For detailed information about scanning GitHub repositories through the frontend, see [README-github-scanning.md](./README-github-scanning.md).
+
+**Note**: Both the backend server and frontend must be running locally for all features to work properly.
