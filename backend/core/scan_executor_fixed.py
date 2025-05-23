@@ -255,7 +255,10 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+        except Exception as e:
+            logger.error(f"Error: {str(e)}")
+            return None
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -265,7 +268,7 @@ class ScanExecutor:
                 if not self._tool_exists('slither'):
                     logger.warning(f"Tool slither not found in system path. Install using: pip install slither-analyzer")
                     return {
-                        "status": "unavailable",
+                "status": "unavailable",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": "Tool not installed: slither not found in system path."
@@ -278,7 +281,7 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -288,7 +291,7 @@ class ScanExecutor:
                 if not self._tool_exists('myth'):
                     logger.warning(f"Tool mythril not found in system path. Install using: pip install mythril")
                     return {
-                        "status": "unavailable",
+                "status": "unavailable",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": "Tool not installed: mythril not found in system path."
@@ -301,7 +304,7 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -311,7 +314,7 @@ class ScanExecutor:
                 if not self._tool_exists('solhint'):
                     logger.warning(f"Tool solhint not found in system path. Install using: npm install -g solhint")
                     return {
-                        "status": "unavailable",
+                "status": "unavailable",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": "Tool not installed: solhint not found in system path."
@@ -325,7 +328,7 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -335,7 +338,7 @@ class ScanExecutor:
                 if not self._tool_exists('manticore'):
                     logger.warning(f"Tool manticore not found in system path. Install using: pip install manticore")
                     return {
-                        "status": "unavailable",
+                "status": "unavailable",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": "Tool not installed: manticore not found in system path."
@@ -364,7 +367,7 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -374,7 +377,7 @@ class ScanExecutor:
                 if not self._tool_exists('echidna'):
                     logger.warning(f"Tool echidna not found in system path. Please install echidna from https://github.com/crytic/echidna")
                     return {
-                        "status": "unavailable",
+                "status": "unavailable",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": "Tool not installed: echidna not found in system path."
@@ -416,7 +419,7 @@ class ScanExecutor:
                 if not target.endswith('.sol'):
                     logger.warning(f"Tool {tool_name} requires a Solidity contract file. Skipping.")
                     return {
-                        "status": "skipped",
+                "status": "skipped",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Skipped: {tool_name} requires a Solidity contract file. Target was: {target}"
@@ -433,14 +436,22 @@ class ScanExecutor:
                     if import_result.returncode != 0:
                         logger.warning("Securify Python module not found. Please install Securify from https://github.com/eth-sri/securify2")
                         return {
-                            "status": "unavailable",
+        except Exception as e:
+            logger.error(f"Error: {str(e)}")
+            return None
+                "status": "unavailable",
                             "execution_time": 0,
                             "findings": [],
                             "raw_output": "Tool not installed: securify Python module not found."
                         }
-                except Exception as e:
-                    logger.error(f"Error: {str(e)}")
-                    return None
+                except Exception:
+                    logger.warning("Failed to check for Securify module.")
+                    return {
+                "status": "unavailable",
+                        "execution_time": 0,
+                        "findings": [],
+                        "raw_output": "Tool not installed or not properly configured: securify"
+                    }
                 
                 # Generate output file path
                 output_file = f"{target}.securify.json"
@@ -483,7 +494,7 @@ class ScanExecutor:
                 
                 if not command:
                     return {
-                        "status": "error",
+                "status": "error",
                         "execution_time": 0,
                         "findings": [],
                         "raw_output": f"Invalid tool configuration: missing command for {tool_name}"

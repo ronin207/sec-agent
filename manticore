@@ -1,0 +1,8 @@
+#!/bin/bash
+source "/Users/HarutoKimura/Research/sec-agent/.venv/manticore-env/bin/activate"
+
+# Define path to the Python executable
+PYTHON="/Users/HarutoKimura/Research/sec-agent/.venv/manticore-env/bin/python"
+
+# Run Manticore directly with Python
+$PYTHON -m manticore "$@"

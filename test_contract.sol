@@ -40,8 +40,8 @@ contract VulnerableToken {
         recipient.send(amount);
     }
     
-    // Missing visibility specifier
-    function initializeContract(address _owner) {
+    // Added public visibility specifier
+    function initializeContract(address _owner) public {
         // Missing visibility specifier (public by default)
         owner = _owner;
     }

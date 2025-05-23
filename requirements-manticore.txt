@@ -1,0 +1,6 @@
+# Manticore and its specific dependencies
+manticore==0.3.7
+crytic-compile==0.2.2
+# Lower versions of eth dependencies compatible with manticore
+eth-typing<4.0.0,>=3.3.0
+eth-utils<2.0.0,>=1.9.0 

@@ -134,6 +134,40 @@ flowchart TD
     class Demo,Main entry;
 ```
 
+## Installation
+
+This project has several dependencies with potential conflicts. The `requirements.txt` file contains everything you need with clear instructions.
+
+### Basic Installation
+
+```bash
+# Install core dependencies
+pip install -r requirements.txt
+```
+
+### Installing Security Tools (Optional)
+
+Due to dependency conflicts, security analysis tools need to be installed separately after installing the core requirements:
+
+```bash
+# For Slither (Solidity analyzer)
+pip install slither-analyzer==0.9.5 web3==6.0.0
+
+# For Mythril (smart contract security analyzer)
+pip install mythril==0.23.15
+
+# For Manticore (symbolic execution tool)
+pip install manticore==0.3.7 crytic-compile==0.2.2
+```
+
+### Note on Dependencies
+
+Some tools have conflicting dependencies, particularly with Ethereum library versions. The recommended approach is to:
+
+1. Install core requirements first
+2. Install optional security tools in a clean environment when needed
+3. Some tools like aderyn and securify2 require separate installation from their GitHub repositories
+
 ## Getting Started
 
 1. Install Python dependencies:

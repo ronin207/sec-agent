@@ -261,10 +261,18 @@ contract FixedContract {{
         """
         logger.info(f"Standardizing security findings using {self.model_name}")
 
+        # Initialize formatted_findings list to store any additional findings we process
+        formatted_findings = []
+
         # Process the raw findings before sending to the model
         # Check for compiler version vulnerabilities
         if isinstance(raw_findings, dict) and 'findings' in raw_findings:
-            for finding in raw_findings.get('findings', []):
+            raw_findings_list = raw_findings.get('findings', [])
+            
+            # Create a new list for processed findings
+            processed_findings = []
+            
+            for finding in raw_findings_list:
                 description = finding.get('description', '')
                 title = finding.get('name', '')
                 
@@ -331,6 +339,15 @@ contract FixedContract {{
                             f"{version_details.get('recommended_version', '^0.8.20')}."
                         )
                         finding['description'] = enhanced_desc
+                
+                processed_findings.append(finding)
+                
+            # Update raw_findings with processed findings
+            raw_findings['findings'] = processed_findings
+            
+            # Add any formatted findings we created
+            if formatted_findings:
+                raw_findings['findings'].extend(formatted_findings)
 
         # Create a prompt template for standardizing the findings
         prompt = ChatPromptTemplate.from_template(

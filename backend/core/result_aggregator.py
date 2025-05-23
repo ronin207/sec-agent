@@ -20,14 +20,14 @@ class ResultAggregator:
         """Initialize ResultAggregator."""
         logger.info("Initializing ResultAggregator")
     
-    def aggregate_results(self, scan_results: Dict, cve_info: Union[Dict, str, Any]) -> Dict:
+    def aggregate_results(self, scan_results: Dict, cve_info: Union[Dict, str, Any], ai_analysis_findings: Union[Dict, List, Any] = None) -> Dict:
         """
         Aggregate and deduplicate results from multiple sources.
 
         Args:
             scan_results: Results from security tools
             cve_info: Information from CVE database
-            ai_analysis_findings: Findings from AI-based code analysis
+            ai_analysis_findings: Findings from AI-based code analysis (optional)
 
         Returns:
             Dictionary containing aggregated results
@@ -38,6 +38,13 @@ class ResultAggregator:
         if not isinstance(cve_info, dict):
             logger.warning(f"Expected dict for cve_info but got {type(cve_info)}. Converting to empty dict.")
             cve_info = {}
+        
+        # Ensure ai_analysis_findings is a dictionary
+        if ai_analysis_findings is None:
+            ai_analysis_findings = {}
+        elif not isinstance(ai_analysis_findings, dict):
+            logger.warning(f"Expected dict for ai_analysis_findings but got {type(ai_analysis_findings)}. Converting to empty dict.")
+            ai_analysis_findings = {}
         
         # Copy scan metadata
         aggregated_results = {
@@ -96,6 +103,27 @@ class ResultAggregator:
             for finding in findings:
                 finding["tool"] = tool_name
                 all_findings.append(finding)
+        
+        # Add AI analysis findings if available
+        if ai_analysis_findings and ai_analysis_findings.get("findings"):
+            ai_findings = ai_analysis_findings.get("findings", [])
+            # Add AI tool identifier to each finding
+            for finding in ai_findings:
+                finding["tool"] = "AI Analysis"
+                all_findings.append(finding)
+            
+            # Add stats for AI analysis
+            aggregated_results["stats"]["findings_by_tool"]["AI Analysis"] = {
+                "total": len(ai_findings),
+                "unique": 0,
+                "by_severity": {
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "low": 0,
+                    "info": 0
+                }
+            }
         
         # Total raw findings before deduplication
         total_raw_findings = len(all_findings)
@@ -331,15 +359,66 @@ class ResultAggregator:
     
     def _map_findings_to_cves(self, findings: List[Dict], cve_info: Dict) -> List[Dict]:
         """
-        Export results to JSON format.
-
+        Map findings to CVE IDs when possible.
+        
         Args:
-            results: Aggregated results dictionary
-
+            findings: List of findings to map
+            cve_info: Dictionary containing CVE information
+            
         Returns:
-            JSON string of the results
+            List of findings with CVE information added where applicable
         """
-        return json.dumps(results, indent=2)
+        # If no CVE info provided, return findings as is
+        if not cve_info or not isinstance(cve_info, dict) or not cve_info.get('cves'):
+            return findings
+            
+        # Try to map findings to CVEs based on descriptions and patterns
+        mapped_findings = []
+        
+        for finding in findings:
+            # Copy the finding to avoid modifying the original
+            mapped_finding = finding.copy()
+            
+            # Look for CVE matches
+            if cve_info.get('cves'):
+                for cve in cve_info.get('cves', []):
+                    # Simple matching based on keywords
+                    if cve.get('description') and finding.get('description'):
+                        if any(keyword.lower() in finding.get('description').lower() for keyword in cve.get('keywords', [])):
+                            mapped_finding['cve_id'] = cve.get('id')
+                            mapped_finding['cve_description'] = cve.get('description')
+                            break
+            
+            mapped_findings.append(mapped_finding)
+            
+        return mapped_findings
+
+    def _group_findings_by_severity(self, findings: List[Dict]) -> Dict:
+        """
+        Group findings by severity level.
+        
+        Args:
+            findings: List of findings to group
+            
+        Returns:
+            Dictionary with findings grouped by severity
+        """
+        grouped = {
+            "critical": [],
+            "high": [],
+            "medium": [],
+            "low": [],
+            "info": []
+        }
+        
+        for finding in findings:
+            severity = finding.get('severity', '').lower()
+            if severity not in grouped:
+                severity = 'info'  # Default to info if severity is unknown
+                
+            grouped[severity].append(finding)
+            
+        return grouped
 
     def export_to_markdown(self, results: Dict) -> str:
         """

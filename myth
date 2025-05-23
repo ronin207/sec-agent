@@ -1,0 +1,11 @@
+#!/bin/bash
+source "/Users/HarutoKimura/Research/sec-agent/.venv/mythril-env/bin/activate"
+
+# Set solc version
+export SOLC_VERSION="0.6.12"
+
+# Define path to the Python executable
+PYTHON="/Users/HarutoKimura/Research/sec-agent/.venv/mythril-env/bin/python"
+
+# Run Mythril using the entry point in the package
+$PYTHON -c "from mythril.interfaces.cli import main; main()" "$@"

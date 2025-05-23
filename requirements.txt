@@ -1,38 +1,65 @@
-# Web Framework
+# SECURITY AGENT REQUIREMENTS
+# -----------------------
+# This file contains all dependencies needed for the security agent.
+# Note: Web3/Ethereum tools have conflicting dependencies and should be installed 
+# in separate virtual environments.
+
+# == CORE DEPENDENCIES ==
+# Install these first: pip install -r requirements.txt
 flask==2.2.3
 flask-cors==3.0.10
 requests>=2.31.0
 urllib3<2
+python-dotenv==1.0.0
+rich>=13.5.0
+environs>=9.5.0
+PyPDF2>=3.0.0
+validators>=0.22.0
+pygithub==1.58.2
+typing-extensions>=4.5.0
+packaging>=23.2
+markupsafe>=2.1.1
+werkzeug<3.0.0
+beautifulsoup4>=4.12.2
+selenium>=4.14.0
+webdriver-manager>=4.0.1
+lxml>=4.9.3
 
-# AI/LLM Libraries
+# == AI/LLM DEPENDENCIES ==
+# Install with: pip install openai langchain langchain-community langchain-openai langchain-core langchain-chroma chromadb
 openai>=1.3.0
 tiktoken==0.5.2
 langchain>=0.0.267
 langchain-community>=0.0.7
 langchain-openai>=0.0.2
 langchain-core>=0.1.4
+langchain-chroma>=0.1.0
 chromadb>=0.4.6
-
-# Data Handling & Utilities
 pydantic>=1.10.8
-python-dotenv==1.0.0
-packaging==23.1
-rich>=13.5.0
-environs>=9.5.0
-PyPDF2>=3.0.0
-validators>=0.22.0
-pygithub==1.58.2
 
-# Solidity Security Analysis Tools
+# == SECURITY TOOLS ==
+# WARNING: These tools have conflicting dependencies (eth-abi versions)
+# INSTALLATION INSTRUCTIONS:
+#
+# 1. For Slither (requires eth-abi>=4.0.0):
 slither-analyzer==0.9.5
-mythril==0.23.15
+# 
+# 2. For Mythril (requires eth-abi<3.0.0):
+# mythril==0.23.15
+# 
+# 3. For Solhint (Node.js package):
+# Install with: npm install -g solhint
+#
+# 4. For Manticore:
+# manticore==0.3.7
+# crytic-compile==0.2.2
+#
+# 5. For Solc-select (included in core):
 solc-select==1.0.3
-manticore==0.3.7
-echidna-parade>=1.0.0
-aderyn>=1.2.0
-securify2>=0.1.0
+echidna-parade==0.2
 
-# Other Blockchain Security Tools
-xray-solana>=0.1.5
-vrust>=0.0.1
-substrate-scout>=0.4.1
+# == TOOLS REQUIRING MANUAL INSTALLATION ==
+# The following tools need to be installed from their GitHub repositories:
+# - aderyn: https://github.com/Cyfrin/aderyn
+# - securify2: https://github.com/eth-sri/securify2
+# - xray-solana & vrust: Follow project-specific instructions

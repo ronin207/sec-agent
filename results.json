@@ -1,0 +1,136 @@
+{
+  "scan_id": "46c75225-ce7d-4651-8ec2-98e81a01f51f",
+  "timestamp": "2025-05-13T15:51:28.025242",
+  "target": "https://example.com",
+  "input_type": "website",
+  "total_findings": 10,
+  "findings_by_severity": {
+    "Critical": 1,
+    "High": 2,
+    "Medium": 3,
+    "Low": 1,
+    "Info": 3
+  },
+  "findings": [
+    {
+      "id": "zap-xss-1",
+      "name": "Cross-Site Scripting (XSS)",
+      "severity": "High",
+      "description": "A reflected XSS vulnerability was detected in the search parameter",
+      "location": "https://example.com/search?q=test",
+      "evidence": "<script>alert(1)</script>",
+      "source_tool": "OWASP ZAP",
+      "tool_id": "owasp_zap",
+      "cve_id": "CVE-2025-47676",
+      "mitigation": "Implement input validation and output encoding to sanitize user inputs. Use Content Security Policy (CSP) to restrict script execution."
+    },
+    {
+      "id": "zap-csrf-1",
+      "name": "Cross-Site Request Forgery (CSRF)",
+      "severity": "Medium",
+      "description": "Form submission without anti-CSRF token",
+      "location": "https://example.com/login",
+      "evidence": "No CSRF token found in form",
+      "source_tool": "OWASP ZAP",
+      "tool_id": "owasp_zap",
+      "cve_id": "CVE-2025-47676",
+      "mitigation": "Implement anti-CSRF tokens in forms and validate them on the server side."
+    },
+    {
+      "id": "zap-headers-1",
+      "name": "Missing Security Headers",
+      "severity": "Low",
+      "description": "Several security headers are missing from the HTTP response",
+      "location": "https://example.com",
+      "evidence": "Missing: X-XSS-Protection, Content-Security-Policy",
+      "source_tool": "OWASP ZAP",
+      "tool_id": "owasp_zap"
+    },
+    {
+      "id": "nikto-server-info-1",
+      "name": "Server Information Disclosure",
+      "severity": "Medium",
+      "description": "Server header reveals version information",
+      "location": "https://example.com",
+      "evidence": "Server: Apache/2.4.29 (Ubuntu)",
+      "source_tool": "Nikto",
+      "tool_id": "nikto"
+    },
+    {
+      "id": "nikto-directory-listing-1",
+      "name": "Directory Listing Enabled",
+      "severity": "Medium",
+      "description": "Directory listing is enabled on the server",
+      "location": "https://example.com/images/",
+      "evidence": "Directory listing enabled at /images/",
+      "source_tool": "Nikto",
+      "tool_id": "nikto"
+    },
+    {
+      "id": "wappalyzer-tech-1",
+      "name": "Web Server Identified",
+      "severity": "Info",
+      "description": "Web server technology identified",
+      "location": "https://example.com",
+      "evidence": "Apache 2.4.29",
+      "source_tool": "Wappalyzer",
+      "tool_id": "wappalyzer"
+    },
+    {
+      "id": "wappalyzer-tech-2",
+      "name": "Programming Language Identified",
+      "severity": "Info",
+      "description": "Server-side programming language identified",
+      "location": "https://example.com",
+      "evidence": "PHP 7.4",
+      "source_tool": "Wappalyzer",
+      "tool_id": "wappalyzer"
+    },
+    {
+      "id": "wappalyzer-tech-3",
+      "name": "JavaScript Framework Identified",
+      "severity": "Info",
+      "description": "JavaScript framework identified",
+      "location": "https://example.com",
+      "evidence": "React 17.0.2",
+      "source_tool": "Wappalyzer",
+      "tool_id": "wappalyzer"
+    },
+    {
+      "id": "nuclei-cve-2021-44228",
+      "name": "Apache Log4j RCE (CVE-2021-44228)",
+      "severity": "Critical",
+      "description": "Remote code execution vulnerability in Log4j",
+      "location": "https://example.com/api/login",
+      "evidence": "Vulnerable Log4j version detected",
+      "source_tool": "Nuclei",
+      "tool_id": "nuclei",
+      "cve_id": "CVE-2021-44228"
+    },
+    {
+      "id": "nuclei-cve-2023-23506",
+      "name": "Prototype Pollution in Next.js (CVE-2023-23506)",
+      "severity": "High",
+      "description": "Prototype pollution in Next.js leading to authentication bypass",
+      "location": "https://example.com",
+      "evidence": "Next.js version < 13.5.6",
+      "source_tool": "Nuclei",
+      "tool_id": "nuclei",
+      "cve_id": "CVE-2023-23506"
+    }
+  ],
+  "cves": [
+    "CVE-2025-47686",
+    "CVE-2025-47681",
+    "CVE-2025-47679",
+    "CVE-2025-47677",
+    "CVE-2025-47676"
+  ],
+  "execution_time": 2.0219383239746094,
+  "tools_used": [
+    "OWASP ZAP",
+    "Nikto",
+    "Wappalyzer",
+    "Nuclei"
+  ]
+}

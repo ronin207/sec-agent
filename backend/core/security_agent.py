@@ -55,6 +55,7 @@ class SecurityAgent:
         self.result_summarizer = ResultSummarizer(api_key=self.api_key)
         self.scan_executor = ScanExecutor(result_summarizer=self.result_summarizer)
         self.result_aggregator = ResultAggregator()
+        self.ai_audit_analyzer = AIAuditAnalyzer(api_key=self.api_key)
         
         # Keep track of last input and partial results for recovery
         self._last_input = None
@@ -175,6 +176,36 @@ class SecurityAgent:
             
             # Update partial results with scan results
             results['scan_results'] = scan_results
+            self._partial_results = results.copy()
+            
+            # Step 4.5: Perform AI-based code analysis for Solidity contracts
+            ai_analysis_findings = []
+            if input_result.get('type') == 'solidity':
+                logger.info("Performing AI-based code analysis")
+                # For single file
+                if not input_result.get('is_multiple') and os.path.isfile(input_result.get('input')):
+                    with open(input_result.get('input'), 'r') as f:
+                        code = f.read()
+                        contract_name = os.path.basename(input_result.get('input'))
+                        ai_analysis_findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
+                # For multiple files
+                elif input_result.get('is_multiple') and input_result.get('files'):
+                    for file_path in input_result.get('files'):
+                        if file_path.endswith('.sol'):
+                            try:
+                                with open(file_path, 'r') as f:
+                                    code = f.read()
+                                    contract_name = os.path.basename(file_path)
+                                    findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
+                                    # Add file information to each finding
+                                    for finding in findings:
+                                        finding['file'] = file_path
+                                    ai_analysis_findings.extend(findings)
+                            except Exception as e:
+                                logger.error(f"Error analyzing {file_path} with AI: {e}")
+            
+            # Update partial results with AI analysis
+            results['ai_analysis'] = {'count': len(ai_analysis_findings)}
             self._partial_results = results.copy()
             
             # Step 5: Aggregate and deduplicate results
@@ -461,7 +492,7 @@ class SecurityAgent:
                     scan_results["tool_results"].extend(file_scan_results.get("tool_results", []))
                 
                 # Aggregate results
-                aggregated_results = self.result_aggregator.aggregate_results(scan_results, [])
+                aggregated_results = self.result_aggregator.aggregate_results(scan_results, [], {})
                 
                 # Generate summary
                 summary = self.result_summarizer.generate_summary({
