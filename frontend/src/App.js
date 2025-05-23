@@ -23,6 +23,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('summary');
   const [activeSeverity, setActiveSeverity] = useState('high');
   const [inputExpanded, setInputExpanded] = useState(false);
+  const [aiActiveSeverity, setAiActiveSeverity] = useState('high');
 
   // Handle expanding/collapsing input container
   const toggleInputContainer = () => {
@@ -675,7 +676,16 @@ contract SecureContract {
                 }
               }}
             >
-              Issues
+              Security Tools
+            </button>
+            <button 
+              className={`tab-button ${activeTab === 'ai-audit' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ai-audit')}
+            >
+              AI Audit
+              {results && results.aggregated_results && results.aggregated_results.ai_audit_findings && (
+                <span className="tab-badge">{results.aggregated_results.ai_audit_findings.total_findings}</span>
+              )}
             </button>
             <button 
               className={`tab-button ${activeTab === 'debug' ? 'active' : ''}`}
@@ -710,47 +720,73 @@ contract SecureContract {
             {results.formatted_results ? (
               <div className="summary-container">
                 <div className="gemini-card summary-card">
-                  <div className="summary-header">
-                    <h4>Executive Summary</h4>
-                    <div className="summary-meta">
-                      {/* Determine risk level based on severity counts */}
-                      {(() => {
-                        const bySeverity = results.formatted_results.summary?.by_severity || {};
-                        let riskLevel = 'Low';
-                        
-                        if (bySeverity.critical > 0) {
-                          riskLevel = 'Critical';
-                        } else if (bySeverity.high > 0) {
-                          riskLevel = 'High';
-                        } else if (bySeverity.medium > 0) {
-                          riskLevel = 'Medium';
-                        }
-                        
-                        return (
-                          <div className={`risk-badge ${riskLevel.toLowerCase()}`}>
-                            {riskLevel} Risk
-                          </div>
-                        );
-                      })()}
-                      {results.formatted_results.model_used && (
-                        <div className="model-badge">
-                          Model: {results.formatted_results.model_used}
-                        </div>
-                      )}
+                  <div className="section-header">
+                    <div className="header-icon">📊</div>
+                    <div className="header-content">
+                      <h4>Executive Summary</h4>
                     </div>
                   </div>
                   
+                  <div className="summary-badges">
+                    {/* Determine risk level based on severity counts */}
+                    {(() => {
+                      const bySeverity = results.formatted_results.summary?.by_severity || {};
+                      let riskLevel = 'Low';
+                      
+                      if (bySeverity.critical > 0) {
+                        riskLevel = 'Critical';
+                      } else if (bySeverity.high > 0) {
+                        riskLevel = 'High';
+                      } else if (bySeverity.medium > 0) {
+                        riskLevel = 'Medium';
+                      }
+                      
+                      return (
+                        <div className={`risk-badge ${riskLevel.toLowerCase()}`}>
+                          {riskLevel} Risk
+                        </div>
+                      );
+                    })()}
+                    {results.formatted_results.model_used && (
+                      <div className="model-badge">
+                        Model: {results.formatted_results.model_used}
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="summary-content">
-                    <p>Security scan completed with {results.formatted_results.summary?.total_findings || 0} findings.</p>
+                    <p>Security scan completed with {results.formatted_results.summary?.total_findings || 0} findings from security tools.</p>
                     
-                    {/* Summary Statistics */}
+                    {/* Security Tools Statistics */}
                     {results.formatted_results.summary?.by_severity && (
                       <div className="findings-statistics">
-                        <h5>Findings by Severity</h5>
+                        <h5>🔧 Security Tools Findings</h5>
                         <div className="severity-stats">
                           {/* Show severity stats in correct order */}
                           {severityOrder.map(severity => {
                             const count = results.formatted_results.summary.by_severity[severity] || 0;
+                            return count > 0 ? (
+                              <div key={severity} className={`stat-item ${severity.toLowerCase()}`}>
+                                <div className="stat-count">{count}</div>
+                                <div className="stat-label">{severity.charAt(0).toUpperCase() + severity.slice(1)}</div>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* AI Audit Statistics */}
+                    {results.aggregated_results && results.aggregated_results.ai_audit_findings && (
+                      <div className="findings-statistics">
+                        <h5>🤖 AI Audit Findings</h5>
+                        <div className="ai-audit-summary-info">
+                          <p>Found {results.aggregated_results.ai_audit_findings.total_findings} potential security issues using AI-powered analysis.</p>
+                        </div>
+                        <div className="severity-stats">
+                          {/* Show AI audit severity stats */}
+                          {severityOrder.map(severity => {
+                            const count = results.aggregated_results.ai_audit_findings.severity_breakdown?.[severity] || 0;
                             return count > 0 ? (
                               <div key={severity} className={`stat-item ${severity.toLowerCase()}`}>
                                 <div className="stat-count">{count}</div>
@@ -802,7 +838,39 @@ contract SecureContract {
                             className="more-findings-btn"
                             onClick={() => {
                               setActiveTab('issues');
-                              setActiveSeverity('critical');
+                              
+                              // Find the highest severity level that actually has findings
+                              const severityOrder = ['critical', 'high', 'medium', 'low', 'info', 'optimization'];
+                              
+                              // Group findings by severity to find which severities have findings
+                              const findingsBySeverity = {
+                                critical: [],
+                                high: [],
+                                medium: [],
+                                low: [],
+                                info: [],
+                                optimization: []
+                              };
+                              
+                              results.formatted_results.findings.forEach(finding => {
+                                const severity = finding.severity?.toLowerCase() || 'info';
+                                if (findingsBySeverity[severity]) {
+                                  findingsBySeverity[severity].push(finding);
+                                } else {
+                                  findingsBySeverity.info.push(finding);
+                                }
+                              });
+                              
+                              // Find the highest severity that has findings
+                              let targetSeverity = 'info'; // fallback
+                              for (const severity of severityOrder) {
+                                if (findingsBySeverity[severity].length > 0) {
+                                  targetSeverity = severity;
+                                  break;
+                                }
+                              }
+                              
+                              setActiveSeverity(targetSeverity);
                             }}
                           >
                             View all {results.formatted_results.findings.length} findings
@@ -981,13 +1049,23 @@ contract SecureContract {
         
         {activeTab === 'issues' && (
           <div className="tab-content">
-            {/* Display findings of the active severity */}
-            {findingsBySeverity[activeSeverity].length > 0 ? (
+            {findingsBySeverity[activeSeverity] && findingsBySeverity[activeSeverity].length > 0 ? (
               <div className="findings-list">
-                <h3 className="severity-heading">
-                  <span className={`severity-indicator ${activeSeverity}`}></span>
-                  {activeSeverity.charAt(0).toUpperCase() + activeSeverity.slice(1)} Severity Issues ({findingsBySeverity[activeSeverity].length})
-                </h3>
+                <div className="section-header">
+                  <div className="header-icon">🔍</div>
+                  <div className="header-content">
+                    <h4>Security Tools Analysis</h4>
+                    <div className="header-meta">
+                      <div className="analyzer-badge">
+                        Traditional Security Tools
+                      </div>
+                      <div className="findings-count-badge">
+                        {findingsBySeverity[activeSeverity].length} {activeSeverity} finding(s)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 {findingsBySeverity[activeSeverity].map((finding, idx) => (
                   <div key={idx} className="gemini-card finding-card">
                     <div className="finding-header">
@@ -1094,17 +1172,166 @@ contract SecureContract {
           </div>
         )}
         
+        {activeTab === 'ai-audit' && (
+          <div className="tab-content">
+            {results && results.aggregated_results && results.aggregated_results.ai_audit_findings ? (
+              <div className="ai-audit-container">
+                <div className="gemini-card ai-audit-info-card">
+                  <div className="section-header">
+                    <div className="header-icon">🤖</div>
+                    <div className="header-content">
+                      <h4>AI-Powered Security Audit</h4>
+                      <div className="header-meta">
+                        <div className="analyzer-badge">
+                          {results.aggregated_results.ai_audit_findings.analyzer}
+                        </div>
+                        <div className="knowledge-badge">
+                          {results.aggregated_results.ai_audit_findings.knowledge_base}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="ai-audit-summary">
+                    <p>Found {results.aggregated_results.ai_audit_findings.total_findings} potential security issues using AI-powered analysis based on historical audit reports.</p>
+                  </div>
+                </div>
+                
+                {/* AI Audit Severity Tabs */}
+                {(() => {
+                  const aiFindings = results.aggregated_results.ai_audit_findings.findings || [];
+                  
+                  // Categorize AI findings by severity
+                  const aiFindingsBySeverity = {
+                    critical: [],
+                    high: [],
+                    medium: [],
+                    low: [],
+                    info: []
+                  };
+                  
+                  aiFindings.forEach(finding => {
+                    let severity = (finding.severity || 'medium').toLowerCase();
+                    if (severity === 'informational') severity = 'info';
+                    if (!aiFindingsBySeverity[severity]) severity = 'medium';
+                    aiFindingsBySeverity[severity].push(finding);
+                  });
+                  
+                  // Get severity order for AI findings
+                  const aiOrderedSeverities = ['critical', 'high', 'medium', 'low', 'info'].filter(severity => 
+                    aiFindingsBySeverity[severity] && aiFindingsBySeverity[severity].length > 0
+                  );
+                  
+                  // Use the state variable aiActiveSeverity, or default to the first available severity
+                  const currentAiSeverity = aiOrderedSeverities.includes(aiActiveSeverity) ? aiActiveSeverity : (aiOrderedSeverities[0] || 'medium');
+                  
+                  return (
+                    <>
+                      {/* AI Severity tabs */}
+                      {aiOrderedSeverities.length > 0 && (
+                        <div className="severity-tabs">
+                          {aiOrderedSeverities.map(severity => (
+                            <button
+                              key={severity}
+                              className={`severity-tab ${currentAiSeverity === severity ? 'active' : ''} ${severity}`}
+                              onClick={() => setAiActiveSeverity(severity)}
+                            >
+                              <span className="severity-dot"></span>
+                              {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                              <span className="finding-count">{aiFindingsBySeverity[severity].length}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* AI Findings for current severity */}
+                      {aiFindingsBySeverity[currentAiSeverity] && aiFindingsBySeverity[currentAiSeverity].length > 0 ? (
+                        <div className="ai-audit-findings">
+                          {aiFindingsBySeverity[currentAiSeverity].map((finding, idx) => (
+                            <div key={idx} className="gemini-card ai-finding-card">
+                              <div className="ai-finding-header">
+                                <h5>{finding.type || 'Security Issue'}</h5>
+                                <div className="ai-finding-meta">
+                                  <span className={`ai-severity-badge ${(finding.severity || 'medium').toLowerCase()}`}>
+                                    {finding.severity || 'Medium'}
+                                  </span>
+                                  {finding.contract_name && (
+                                    <span className="contract-badge">{finding.contract_name}</span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="ai-finding-content">
+                                <p className="ai-finding-description">
+                                  {finding.description || 'No description available'}
+                                </p>
+                                
+                                {finding.location && (
+                                  <div className="ai-finding-location">
+                                    <strong>Location:</strong> {finding.location}
+                                  </div>
+                                )}
+                                
+                                {finding.file && (
+                                  <div className="ai-finding-file">
+                                    <strong>File:</strong> {finding.file}
+                                  </div>
+                                )}
+                                
+                                {finding.recommendation && (
+                                  <div className="ai-finding-recommendation">
+                                    <strong>AI Recommendation:</strong>
+                                    <p>{finding.recommendation}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="gemini-card no-ai-findings-card">
+                          <div className="no-findings-content">
+                            <div className="success-icon">🤖</div>
+                            <h4>No {currentAiSeverity} AI Audit Issues Found</h4>
+                            <p>The AI audit analyzer did not identify any {currentAiSeverity} severity concerns based on its knowledge base of past audit reports.</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="gemini-card no-ai-audit-card">
+                <div className="no-ai-audit-content">
+                  <div className="info-icon">ℹ️</div>
+                  <h4>AI Audit Not Available</h4>
+                  <p>AI audit analysis is only available for Solidity smart contracts. Please scan a Solidity contract to see AI-powered security analysis.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
         {activeTab === 'debug' && (
           <div className="tab-content">
             <div className="debug-container">
               <div className="gemini-card debug-card">
-                <div className="debug-header">
-                  <h4>Debug Information</h4>
-                  {results.model_used && (
-                    <div className="model-badge">
-                      Model: {results.model_used}
+                <div className="section-header">
+                  <div className="header-icon">🔧</div>
+                  <div className="header-content">
+                    <h4>Debug Information</h4>
+                    <div className="header-meta">
+                      {results.model_used && (
+                        <div className="model-badge">
+                          Model: {results.model_used}
+                        </div>
+                      )}
+                      <div className="debug-badge">
+                        Technical Details
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
                 
                 <div className="debug-content">

@@ -72,7 +72,14 @@ class ResultAggregator:
                     "info": 0
                 },
                 "findings_by_tool": {},
-                "duplicates_removed": 0
+                "duplicates_removed": 0,
+                "ai_findings_by_severity": {
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "low": 0,
+                    "info": 0
+                }
             }
         }
         
@@ -80,7 +87,7 @@ class ResultAggregator:
         if scan_results.get("is_multiple") and scan_results.get("files"):
             aggregated_results["files"] = scan_results.get("files")
         
-        # Extract all findings
+        # Extract all findings from security tools
         all_findings = []
         for tool_result in scan_results.get("tool_results", []):
             tool_name = tool_result.get("tool_name", "unknown")
@@ -104,32 +111,48 @@ class ResultAggregator:
                 finding["tool"] = tool_name
                 all_findings.append(finding)
         
-        # Add AI analysis findings if available
+        # Process AI analysis findings separately for categorization
+        ai_findings_by_severity = {
+            "critical": [],
+            "high": [],
+            "medium": [],
+            "low": [],
+            "info": [],
+            "informational": []  # Handle both "info" and "informational"
+        }
+        
         if ai_analysis_findings and ai_analysis_findings.get("findings"):
             ai_findings = ai_analysis_findings.get("findings", [])
-            # Add AI tool identifier to each finding
-            for finding in ai_findings:
-                finding["tool"] = "AI Analysis"
-                all_findings.append(finding)
             
-            # Add stats for AI analysis
+            # Categorize AI findings by severity
+            for finding in ai_findings:
+                severity = finding.get("severity", "Medium").lower()
+                
+                # Normalize severity names
+                if severity in ["informational"]:
+                    severity = "info"
+                elif severity not in ["critical", "high", "medium", "low", "info"]:
+                    severity = "medium"  # Default to medium if unknown
+                
+                # Add to appropriate severity category
+                if severity in ai_findings_by_severity:
+                    ai_findings_by_severity[severity].append(finding)
+                
+                # Update AI findings severity count
+                aggregated_results["stats"]["ai_findings_by_severity"][severity] += 1
+            
+            # Add stats for AI analysis tool
             aggregated_results["stats"]["findings_by_tool"]["AI Analysis"] = {
                 "total": len(ai_findings),
-                "unique": 0,
-                "by_severity": {
-                    "critical": 0,
-                    "high": 0,
-                    "medium": 0,
-                    "low": 0,
-                    "info": 0
-                }
+                "unique": len(ai_findings),  # AI findings are always unique
+                "by_severity": dict(aggregated_results["stats"]["ai_findings_by_severity"])
             }
         
         # Total raw findings before deduplication
         total_raw_findings = len(all_findings)
         aggregated_results["stats"]["total_raw_findings"] = total_raw_findings
         
-        # Deduplicate findings
+        # Deduplicate findings from security tools only (not AI findings)
         unique_findings, duplicates_info = self._deduplicate_findings(all_findings)
         
         aggregated_results["stats"]["total_findings"] = total_raw_findings
@@ -137,7 +160,7 @@ class ResultAggregator:
         aggregated_results["stats"]["duplicates_removed"] = duplicates_info["total_duplicates"]
         aggregated_results["stats"]["duplicate_groups"] = duplicates_info["duplicate_groups"]
         
-        # Categorize findings by severity
+        # Categorize findings by severity for security tools
         for finding in unique_findings:
             severity = finding.get("severity", "").lower()
             if severity not in aggregated_results["findings_by_severity"]:
@@ -161,7 +184,7 @@ class ResultAggregator:
         # Group findings by severity
         grouped_findings = self._group_findings_by_severity(mapped_findings)
         
-        # Create aggregated result
+        # Create aggregated result with separated AI audit findings
         aggregated_result = {
             "scan_id": scan_results.get('scan_id'),
             "timestamp": datetime.now().isoformat(),
@@ -173,7 +196,16 @@ class ResultAggregator:
             "cves": cve_info.get('cves', []),
             "execution_time": scan_results.get('execution_time', 0),
             "tools_used": [tool.get('tool_name') for tool in scan_results.get('tool_results', [])],
-            "stats": aggregated_results["stats"]
+            "stats": aggregated_results["stats"],
+            # Add AI audit findings as a separate category
+            "ai_audit_findings": {
+                "total_findings": sum(len(findings) for findings in ai_findings_by_severity.values()),
+                "findings": ai_analysis_findings.get("findings", []) if ai_analysis_findings else [],
+                "findings_by_severity": ai_findings_by_severity,
+                "analyzer": ai_analysis_findings.get("analyzer", "AI Audit Analyzer (GPT-4o)") if ai_analysis_findings else None,
+                "knowledge_base": ai_analysis_findings.get("knowledge_base", "Past audit reports database") if ai_analysis_findings else None,
+                "severity_breakdown": dict(aggregated_results["stats"]["ai_findings_by_severity"])
+            } if ai_analysis_findings and ai_analysis_findings.get("findings") else None
         }
         
         return aggregated_result

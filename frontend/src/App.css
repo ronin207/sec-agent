@@ -1204,8 +1204,16 @@ body {
   transform: translateY(-2px);
 }
 
+.severity-tab.critical {
+  border-color: #dc2626;
+}
+
+.severity-tab.critical::before {
+  background-color: #dc2626;
+}
+
 .severity-tab.high {
-  border-color: rgba(234, 67, 53, 0.5);
+  border-color: #ea4335;
 }
 
 .severity-tab.high::before {
@@ -1213,7 +1221,7 @@ body {
 }
 
 .severity-tab.medium {
-  border-color: rgba(251, 188, 4, 0.5);
+  border-color: #fbbc04;
 }
 
 .severity-tab.medium::before {
@@ -1221,7 +1229,7 @@ body {
 }
 
 .severity-tab.low {
-  border-color: rgba(52, 168, 83, 0.5);
+  border-color: #34a853;
 }
 
 .severity-tab.low::before {
@@ -1229,7 +1237,7 @@ body {
 }
 
 .severity-tab.info {
-  border-color: rgba(66, 133, 244, 0.5);
+  border-color: #4285f4;
 }
 
 .severity-tab.info::before {
@@ -1799,12 +1807,12 @@ body {
 
 /* Style stat items by severity */
 .stat-item.critical {
-  background-color: rgba(var(--gemini-severity-high-color-rgb), 0.1);
-  border-color: rgba(var(--gemini-severity-high-color-rgb), 0.3);
+  background-color: rgba(220, 38, 38, 0.1);
+  border-left: 4px solid #dc2626;
 }
 
 .stat-item.critical .stat-count {
-  color: var(--gemini-severity-high-color);
+  color: #dc2626;
 }
 
 .stat-item.high {
@@ -1941,10 +1949,313 @@ body {
 
 /* No summary card */
 .no-summary-card {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
   text-align: center;
+  color: var(--gemini-text-color-secondary);
+}
+
+/* AI Audit Styles */
+.tab-badge {
+  background-color: var(--gemini-brand-color);
+  color: white;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  font-weight: 500;
+}
+
+.ai-audit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.ai-audit-info-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin-bottom: 0;
+}
+
+.ai-audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.ai-audit-header h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.ai-audit-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.analyzer-badge, .knowledge-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+.ai-audit-summary p {
+  margin: 0;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.ai-audit-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ai-finding-card {
+  border-left: 4px solid var(--gemini-brand-color);
+  background-color: var(--chatgpt-card);
+  margin-bottom: 0;
+}
+
+.ai-finding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.ai-finding-header h5 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--chatgpt-text);
+}
+
+.ai-finding-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ai-severity-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.ai-severity-badge.critical {
+  background-color: #dc2626;
+  color: white;
+}
+
+.ai-severity-badge.high {
+  background-color: #ea4335;
+  color: white;
+}
+
+.ai-severity-badge.medium {
+  background-color: #fbbc04;
+  color: #1f2937;
+}
+
+.ai-severity-badge.low {
+  background-color: #34a853;
+  color: white;
+}
+
+.ai-severity-badge.info,
+.ai-severity-badge.informational {
+  background-color: #4285f4;
+  color: white;
+}
+
+.contract-badge {
+  background-color: var(--chatgpt-input-bg);
+  color: var(--chatgpt-text);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.ai-finding-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ai-finding-description {
+  color: var(--chatgpt-text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.ai-finding-location, .ai-finding-file {
   color: var(--chatgpt-text-secondary);
+  font-size: 0.9rem;
+}
+
+.ai-finding-location strong, .ai-finding-file strong {
+  color: var(--chatgpt-text);
+}
+
+.ai-finding-recommendation {
+  background-color: rgba(66, 133, 244, 0.1);
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--gemini-brand-color);
+}
+
+.ai-finding-recommendation strong {
+  color: var(--gemini-brand-color);
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.ai-finding-recommendation p {
+  margin: 0;
+  color: var(--chatgpt-text);
+  line-height: 1.6;
+}
+
+.no-ai-findings-card, .no-ai-audit-card {
+  text-align: center;
+  padding: 2rem;
+}
+
+.no-findings-content, .no-ai-audit-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.no-findings-content .success-icon, 
+.no-ai-audit-content .info-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.no-findings-content h4, 
+.no-ai-audit-content h4 {
+  margin: 0;
+  color: var(--chatgpt-text);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.no-findings-content p, 
+.no-ai-audit-content p {
+  margin: 0;
+  color: var(--chatgpt-text-secondary);
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .ai-audit-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .ai-audit-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .ai-finding-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+}
+
+/* Consistent section header design for all tabs */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.header-icon {
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+}
+
+.header-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-content h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.header-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Badge styles for headers */
+.findings-count-badge,
+.debug-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+.ai-audit-summary-info {
+  margin: 10px 0;
+  padding: 15px;
+  background: rgba(66, 133, 244, 0.15);
+  border-radius: 8px;
+  border-left: 4px solid #4285f4;
+}
+
+.ai-audit-summary-info p {
+  margin: 0;
+  color: #e4e6eb;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Summary badges container - positioned below the purple header */
+.summary-badges {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
 }

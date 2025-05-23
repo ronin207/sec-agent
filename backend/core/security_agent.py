@@ -180,7 +180,7 @@ class SecurityAgent:
             
             # Step 4.5: Perform AI-based code analysis for Solidity contracts
             ai_analysis_findings = []
-            if input_result.get('type') == 'solidity':
+            if input_result.get('type') in ['solidity', 'solidity_contract']:
                 logger.info("Performing AI-based code analysis")
                 # For single file
                 if not input_result.get('is_multiple') and os.path.isfile(input_result.get('input')):
@@ -188,6 +188,10 @@ class SecurityAgent:
                         code = f.read()
                         contract_name = os.path.basename(input_result.get('input'))
                         ai_analysis_findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
+                        # Add file information to findings
+                        for finding in ai_analysis_findings:
+                            finding['file'] = input_result.get('input')
+                            finding['contract_name'] = contract_name
                 # For multiple files
                 elif input_result.get('is_multiple') and input_result.get('files'):
                     for file_path in input_result.get('files'):
@@ -200,6 +204,7 @@ class SecurityAgent:
                                     # Add file information to each finding
                                     for finding in findings:
                                         finding['file'] = file_path
+                                        finding['contract_name'] = contract_name
                                     ai_analysis_findings.extend(findings)
                             except Exception as e:
                                 logger.error(f"Error analyzing {file_path} with AI: {e}")
@@ -208,13 +213,23 @@ class SecurityAgent:
             results['ai_analysis'] = {'count': len(ai_analysis_findings)}
             self._partial_results = results.copy()
             
-            # Step 5: Aggregate and deduplicate results
+            # Step 5: Aggregate and deduplicate results (keeping AI findings separate)
             logger.info("Aggregating scan results")
             aggregated_results = self.result_aggregator.aggregate_results(
                 scan_results,
                 cve_info,
-                ai_analysis_findings
+                {}  # Don't merge AI findings into regular aggregation
             )
+            
+            # Add AI audit findings as a separate section
+            if ai_analysis_findings:
+                aggregated_results['ai_audit_findings'] = {
+                    'total_findings': len(ai_analysis_findings),
+                    'findings': ai_analysis_findings,
+                    'analyzer': 'AI Audit Analyzer (GPT-4o)',
+                    'knowledge_base': 'Past audit reports database'
+                }
+                logger.info(f"AI audit analysis found {len(ai_analysis_findings)} findings")
             
             # Log deduplication stats
             total_deduplicated = aggregated_results.get('total_findings', 0)
@@ -462,6 +477,7 @@ class SecurityAgent:
                 
                 # Process each Solidity file
                 scan_results = {"tool_results": []}
+                ai_analysis_findings = []
                 
                 for doc in solidity_docs:
                     file_path = doc.metadata.get('source')
@@ -477,7 +493,7 @@ class SecurityAgent:
                     # Get tools for Solidity
                     selected_tools = self.tool_selector.select_tools("solidity_contract", [])
                     
-                    # Scan the file
+                    # Scan the file with traditional security tools
                     file_scan_results = self.scan_executor.execute_scans(
                         {
                             "type": "solidity_contract", 
@@ -490,17 +506,47 @@ class SecurityAgent:
                     
                     # Add to overall scan results
                     scan_results["tool_results"].extend(file_scan_results.get("tool_results", []))
+                    
+                    # Perform AI audit analysis on this file
+                    try:
+                        logger.info(f"Performing AI audit analysis on {file_path}")
+                        contract_name = os.path.basename(file_path)
+                        ai_findings = self.ai_audit_analyzer.analyze_solidity_code(file_content, contract_name)
+                        
+                        # Add file information to AI findings
+                        for finding in ai_findings:
+                            finding['file'] = file_path
+                            finding['contract_name'] = contract_name
+                            finding['source'] = 'github_repo'
+                        
+                        ai_analysis_findings.extend(ai_findings)
+                        logger.info(f"AI audit found {len(ai_findings)} findings in {file_path}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error during AI audit analysis of {file_path}: {str(e)}")
                 
-                # Aggregate results
+                # Aggregate traditional security tool results
                 aggregated_results = self.result_aggregator.aggregate_results(scan_results, [], {})
                 
-                # Generate summary
-                summary = self.result_summarizer.generate_summary({
+                # Add AI audit findings as a separate section
+                if ai_analysis_findings:
+                    aggregated_results['ai_audit_findings'] = {
+                        'total_findings': len(ai_analysis_findings),
+                        'findings': ai_analysis_findings,
+                        'analyzer': 'AI Audit Analyzer (GPT-4o)',
+                        'knowledge_base': 'Past audit reports database'
+                    }
+                    logger.info(f"Total AI audit findings: {len(ai_analysis_findings)}")
+                
+                # Generate summary that includes both traditional and AI findings
+                summary_data = {
                     "input_type": "github_repo",
                     "target": repo_url,
                     "findings": aggregated_results.get("findings", []),
-                    "total_findings": aggregated_results.get("total_findings", 0)
-                }, output_format)
+                    "total_findings": aggregated_results.get("total_findings", 0),
+                    "ai_audit_findings": ai_analysis_findings if ai_analysis_findings else []
+                }
+                summary = self.result_summarizer.generate_summary(summary_data)
                 
                 # Complete result
                 result = {
@@ -509,8 +555,7 @@ class SecurityAgent:
                     "target": repo_url,
                     "input_type": "github_repo",
                     "timestamp": datetime.now().isoformat(),
-                    "total_findings": aggregated_results.get("total_findings", 0),
-                    "findings": aggregated_results.get("findings", []),
+                    "aggregated_results": aggregated_results,
                     "summary": summary
                 }
                 
