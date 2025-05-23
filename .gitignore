@@ -54,6 +54,10 @@ build/
 # Virtual environments
 venv/
 .venv/
+test_venv/
+test_venv2/
+test_venv3/
+test_venv4/
 env/
 ENV/
 

@@ -1,5 +1,0 @@
-# Slither and its specific dependencies
-slither-analyzer==0.9.5
-# Pin web3 to a version compatible with eth-abi below 5.0.0
-web3==6.0.0
-eth-abi<5.0.0,>=4.0.0 
