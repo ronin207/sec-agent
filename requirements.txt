@@ -63,3 +63,10 @@ echidna-parade==0.2
 # - aderyn: https://github.com/Cyfrin/aderyn
 # - securify2: https://github.com/eth-sri/securify2
 # - xray-solana & vrust: Follow project-specific instructions
+
+# == FRONTEND DEPENDENCIES ==
+# Install with: npm install
+## For the frontend
+nvm install 18.18.2
+nvm use 18.18.2
+npm install -g npm@9.8.1
