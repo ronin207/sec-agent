@@ -89,5 +89,9 @@ results/
 scans/
 output/
 
+# Cache directories
+**/cve_cache/
+**/scan_cache/
+
 # Cursor rules file - keep local only
 settings.cursorrules
