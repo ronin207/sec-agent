@@ -33,7 +33,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST"]}})
 
 # Initialize the security agent components
 kb = SecurityKnowledgeBase()
-result_summarizer = ResultSummarizer(model_name="gpt-4o-mini")
+result_summarizer = ResultSummarizer(model_name="gpt-4o")
 security_agent = SecurityAgent()
 ai_audit_analyzer = AIAuditAnalyzer()
 
@@ -57,7 +57,7 @@ def index():
         "status": "running",
         "message": "Security Agent API is running",
         "version": "1.0.0",
-        "llm_model": "gpt-4o-mini",
+        "llm_model": "gpt-4o",
         "ai_audit_model": "gpt-4o",
         "features": {
             "traditional_security_scanning": True,
@@ -96,13 +96,13 @@ def scan():
                 token=token
             )
             
-            # Standardize the security findings using 4o-mini
+            # Standardize the security findings using 4o
             standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
             
             # Add model info and combine results
-            standardized_result["model_used"] = "gpt-4o-mini"
+            standardized_result["model_used"] = "gpt-4o"
             result["formatted_results"] = standardized_result
-            result["model_used"] = "gpt-4o-mini"
+            result["model_used"] = "gpt-4o"
             
             return jsonify(result)
         
@@ -124,9 +124,9 @@ def scan():
         standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o-mini"
+        standardized_result["model_used"] = "gpt-4o"
         result["formatted_results"] = standardized_result
-        result["model_used"] = "gpt-4o-mini"
+        result["model_used"] = "gpt-4o"
         
         return jsonify(result)
     except Exception as e:
@@ -171,9 +171,9 @@ def scan_github_repo():
         standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o-mini"
+        standardized_result["model_used"] = "gpt-4o"
         result["formatted_results"] = standardized_result
-        result["model_used"] = "gpt-4o-mini"
+        result["model_used"] = "gpt-4o"
         
         return jsonify(result)
     except Exception as e:
@@ -183,7 +183,7 @@ def scan_github_repo():
             'status': 'error',
             'timestamp': datetime.now().isoformat(),
             'scan_type': 'github_repo',
-            'model_used': 'gpt-4o-mini'
+            'model_used': 'gpt-4o'
         }), 500
 
 @app.route('/api/scan/files', methods=['POST'])
@@ -214,9 +214,9 @@ def scan_files_endpoint():
         standardized_result = result_summarizer.standardize_security_findings(results.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o-mini"
+        standardized_result["model_used"] = "gpt-4o"
         results["formatted_results"] = standardized_result
-        results["model_used"] = "gpt-4o-mini"
+        results["model_used"] = "gpt-4o"
         
         # Clean up temp files
         for file_path in file_paths:
@@ -235,12 +235,12 @@ def scan_files_endpoint():
 @app.route('/api/status', methods=['GET'])
 def status_endpoint():
     """Endpoint to check server status"""
-    return jsonify({"status": "online", "model": "gpt-4o-mini"})
+    return jsonify({"status": "online", "model": "gpt-4o"})
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "model": "gpt-4o-mini"})
+    return jsonify({"status": "healthy", "model": "gpt-4o"})
 
 @app.route('/api/set-github-token', methods=['POST'])
 def set_github_token():

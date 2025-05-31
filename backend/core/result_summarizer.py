@@ -43,13 +43,13 @@ class ResultSummarizer:
     Generates human-readable summaries of security scan results using OpenAI API.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o"):
         """
         Initialize the Result Summarizer module.
         
         Args:
             api_key: OpenAI API key (falls back to environment variable)
-            model_name: Model to use for summaries (default: gpt-4o-mini)
+            model_name: Model to use for summaries (default: gpt-4o)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         logger.info(f"Initializing ResultSummarizer with API key: {'Set' if self.api_key else 'Not set'}")
@@ -58,7 +58,7 @@ class ResultSummarizer:
     
     def extract_version_vulnerability_details(self, description: str) -> Dict[str, str]:
         """
-        Extract specific details about compiler version vulnerabilities using GPT-4o-mini.
+        Extract specific details about compiler version vulnerabilities using GPT-4o.
         
         Args:
             description: The vulnerability description containing version information
@@ -225,7 +225,7 @@ contract FixedContract {{
     
     def standardize_security_findings(self, raw_findings: Dict) -> Dict:
         """
-        Process security tool outputs using 4o-mini model and standardize to the required format.
+        Process security tool outputs using 4o model and standardize to the required format.
         
         Args:
             raw_findings: The raw security findings JSON from security tools

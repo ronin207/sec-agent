@@ -30,13 +30,13 @@ class CVEKnowledgeQuery:
     Query CVE knowledge base using OpenAI API to provide security insights and risk assessment.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o"):
         """
         Initialize the CVE Knowledge Query module.
         
         Args:
             api_key: OpenAI API key (falls back to environment variable)
-            model_name: Model to use for queries (default: gpt-4o-mini)
+            model_name: Model to use for queries (default: gpt-4o)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         logger.info(f"Initializing CVEKnowledgeQuery with API key: {'Set' if self.api_key else 'Not set'}")

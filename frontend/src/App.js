@@ -486,7 +486,7 @@ contract SecureContract {
     
     // Check for formatted results from the standardized 4o-mini output
     if (results.formatted_results) {
-      console.log('Using formatted results from 4o-mini:', results.formatted_results);
+      console.log('Using formatted results from 4o:', results.formatted_results);
       
       const formattedFindings = results.formatted_results.findings || [];
       
