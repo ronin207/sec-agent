@@ -33,7 +33,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST"]}})
 
 # Initialize the security agent components
 kb = SecurityKnowledgeBase()
-result_summarizer = ResultSummarizer(model_name="gpt-4o")
+result_summarizer = ResultSummarizer(model_name="gpt-4o-mini")
 security_agent = SecurityAgent()
 ai_audit_analyzer = AIAuditAnalyzer()
 
@@ -57,8 +57,8 @@ def index():
         "status": "running",
         "message": "Security Agent API is running",
         "version": "1.0.0",
-        "llm_model": "gpt-4o",
-        "ai_audit_model": "gpt-4o",
+        "llm_model": "gpt-4o-mini",
+        "ai_audit_model": "gpt-4o-mini",
         "features": {
             "traditional_security_scanning": True,
             "ai_powered_audit": True,
@@ -100,9 +100,9 @@ def scan():
             standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
             
             # Add model info and combine results
-            standardized_result["model_used"] = "gpt-4o"
+            standardized_result["model_used"] = "gpt-4o-mini"
             result["formatted_results"] = standardized_result
-            result["model_used"] = "gpt-4o"
+            result["model_used"] = "gpt-4o-mini"
             
             return jsonify(result)
         
@@ -124,9 +124,9 @@ def scan():
         standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o"
+        standardized_result["model_used"] = "gpt-4o-mini"
         result["formatted_results"] = standardized_result
-        result["model_used"] = "gpt-4o"
+        result["model_used"] = "gpt-4o-mini"
         
         return jsonify(result)
     except Exception as e:
@@ -171,9 +171,9 @@ def scan_github_repo():
         standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o"
+        standardized_result["model_used"] = "gpt-4o-mini"
         result["formatted_results"] = standardized_result
-        result["model_used"] = "gpt-4o"
+        result["model_used"] = "gpt-4o-mini"
         
         return jsonify(result)
     except Exception as e:
@@ -183,7 +183,7 @@ def scan_github_repo():
             'status': 'error',
             'timestamp': datetime.now().isoformat(),
             'scan_type': 'github_repo',
-            'model_used': 'gpt-4o'
+            'model_used': 'gpt-4o-mini'
         }), 500
 
 @app.route('/api/scan/files', methods=['POST'])
@@ -214,9 +214,9 @@ def scan_files_endpoint():
         standardized_result = result_summarizer.standardize_security_findings(results.get('aggregated_results', {}))
         
         # Add model info and combine results
-        standardized_result["model_used"] = "gpt-4o"
+        standardized_result["model_used"] = "gpt-4o-mini"
         results["formatted_results"] = standardized_result
-        results["model_used"] = "gpt-4o"
+        results["model_used"] = "gpt-4o-mini"
         
         # Clean up temp files
         for file_path in file_paths:
@@ -235,12 +235,12 @@ def scan_files_endpoint():
 @app.route('/api/status', methods=['GET'])
 def status_endpoint():
     """Endpoint to check server status"""
-    return jsonify({"status": "online", "model": "gpt-4o"})
+    return jsonify({"status": "online", "model": "gpt-4o-mini"})
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "model": "gpt-4o"})
+    return jsonify({"status": "healthy", "model": "gpt-4o-mini"})
 
 @app.route('/api/set-github-token', methods=['POST'])
 def set_github_token():
@@ -303,7 +303,7 @@ def ai_audit_endpoint():
                 'knowledge_base': 'Past audit reports database',
                 'analysis_timestamp': datetime.now().isoformat()
             },
-            'model_used': 'gpt-4o'
+            'model_used': 'gpt-4o-mini'
         }
         
         # Add finding statistics
@@ -417,7 +417,7 @@ def ai_audit_batch_endpoint():
                 'has_high_issues': severity_counts.get('High', 0) > 0
             },
             'contract_results': contract_results,
-            'model_used': 'gpt-4o'
+            'model_used': 'gpt-4o-mini'
         }
         
         logger.info(f"Batch AI audit completed. Analyzed {len(contract_results)} contracts with {len(all_findings)} total findings")
