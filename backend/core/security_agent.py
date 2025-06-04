@@ -22,6 +22,7 @@ from backend.core.scan_executor import ScanExecutor
 from backend.core.result_aggregator import ResultAggregator
 from backend.core.result_summarizer import ResultSummarizer
 from backend.core.ai_audit_analyzer import AIAuditAnalyzer
+from backend.core.chunked_ai_audit_analyzer import ChunkedAIAuditAnalyzer
 
 # Import helpers
 from backend.utils.helpers import get_logger
@@ -56,6 +57,7 @@ class SecurityAgent:
         self.scan_executor = ScanExecutor(result_summarizer=self.result_summarizer)
         self.result_aggregator = ResultAggregator()
         self.ai_audit_analyzer = AIAuditAnalyzer(api_key=self.api_key)
+        self.chunked_ai_audit_analyzer = ChunkedAIAuditAnalyzer(model_name="gpt-4o-mini", api_key=self.api_key)
         
         # Keep track of last input and partial results for recovery
         self._last_input = None
@@ -182,32 +184,46 @@ class SecurityAgent:
             ai_analysis_findings = []
             if input_result.get('type') in ['solidity', 'solidity_contract']:
                 logger.info("Performing AI-based code analysis")
-                # For single file
-                if not input_result.get('is_multiple') and os.path.isfile(input_result.get('input')):
-                    with open(input_result.get('input'), 'r') as f:
-                        code = f.read()
-                        contract_name = os.path.basename(input_result.get('input'))
-                        ai_analysis_findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
-                        # Add file information to findings
-                        for finding in ai_analysis_findings:
-                            finding['file'] = input_result.get('input')
-                            finding['contract_name'] = contract_name
-                # For multiple files
-                elif input_result.get('is_multiple') and input_result.get('files'):
-                    for file_path in input_result.get('files'):
-                        if file_path.endswith('.sol'):
-                            try:
-                                with open(file_path, 'r') as f:
-                                    code = f.read()
-                                    contract_name = os.path.basename(file_path)
-                                    findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
-                                    # Add file information to each finding
-                                    for finding in findings:
-                                        finding['file'] = file_path
-                                        finding['contract_name'] = contract_name
-                                    ai_analysis_findings.extend(findings)
-                            except Exception as e:
-                                logger.error(f"Error analyzing {file_path} with AI: {e}")
+                
+                # Get Solidity files
+                solidity_files = []
+                if input_result.get('is_multiple') and input_result.get('files'):
+                    solidity_files = [f for f in input_result.get('files', []) if f.endswith('.sol')]
+                elif not input_result.get('is_multiple') and os.path.isfile(input_result.get('input')):
+                    if input_result.get('input').endswith('.sol'):
+                        solidity_files = [input_result.get('input')]
+                
+                if solidity_files:
+                    # Use chunked analyzer for multiple files
+                    if len(solidity_files) > 1:
+                        logger.info(f"Using chunked AI analysis for {len(solidity_files)} Solidity files")
+                        chunked_result = self.chunked_ai_audit_analyzer.analyze_multiple_files(solidity_files)
+                        ai_analysis_findings = chunked_result.get('findings', [])
+                        
+                        # Add chunking metadata to results
+                        results['ai_analysis_metadata'] = {
+                            'chunking_used': True,
+                            'chunking_summary': chunked_result.get('chunking_summary', {}),
+                            'processing_stats': chunked_result.get('processing_stats', {}),
+                            'total_files_processed': chunked_result.get('total_files', 0)
+                        }
+                    else:
+                        # Single file - use regular analyzer
+                        logger.info("Using regular AI analysis for single Solidity file")
+                        file_path = solidity_files[0]
+                        with open(file_path, 'r') as f:
+                            code = f.read()
+                            contract_name = os.path.basename(file_path)
+                            ai_analysis_findings = self.ai_audit_analyzer.analyze_solidity_code(code, contract_name)
+                            # Add file information to findings
+                            for finding in ai_analysis_findings:
+                                finding['file'] = file_path
+                                finding['contract_name'] = contract_name
+                        
+                        results['ai_analysis_metadata'] = {
+                            'chunking_used': False,
+                            'total_files_processed': 1
+                        }
             
             # Update partial results with AI analysis
             results['ai_analysis'] = {'count': len(ai_analysis_findings)}
@@ -226,7 +242,7 @@ class SecurityAgent:
                 aggregated_results['ai_audit_findings'] = {
                     'total_findings': len(ai_analysis_findings),
                     'findings': ai_analysis_findings,
-                    'analyzer': 'AI Audit Analyzer (GPT-4o)',
+                    'analyzer': 'AI Audit Analyzer (GPT-4o-mini)',
                     'knowledge_base': 'Past audit reports database'
                 }
                 logger.info(f"AI audit analysis found {len(ai_analysis_findings)} findings")
@@ -423,107 +439,105 @@ class SecurityAgent:
                 
                 for branch in branches_to_try:
                     try:
-                        logger.info(f"Attempting to clone repository with branch '{branch}'")
+                        logger.info(f"Attempting to clone branch '{branch}'")
                         
-                        # Create a new repo_dir for each attempt to avoid conflicts
-                        if cloned and os.path.exists(repo_dir):
-                            shutil.rmtree(repo_dir)
-                            repo_dir = tempfile.mkdtemp()
+                        # Build clone command with token if available
+                        if github_token:
+                            # Use token in URL for authentication
+                            auth_url = repo_url.replace("https://", f"https://{github_token}@")
+                            clone_cmd = f"git clone --depth 1 --branch {branch} {auth_url} {repo_dir}"
+                        else:
+                            clone_cmd = f"git clone --depth 1 --branch {branch} {repo_url} {repo_dir}"
                         
-                        # Try to initialize the loader with the current branch
-                        loader = GitLoader(
-                            repo_path=repo_dir,
-                            clone_url=repo_url,
-                            branch=branch
-                        )
+                        # Execute clone command
+                        import subprocess
+                        result = subprocess.run(clone_cmd, shell=True, capture_output=True, text=True, timeout=300)
                         
-                        # Try to load documents - this will clone the repo
-                        documents = loader.load()
-                        
-                        # If we get here, the clone was successful
-                        logger.info(f"Successfully cloned repository using branch '{branch}'")
-                        cloned = True
-                        break
-                        
+                        if result.returncode == 0:
+                            logger.info(f"Successfully cloned repository using branch '{branch}'")
+                            cloned = True
+                            break
+                        else:
+                            logger.debug(f"Failed to clone with branch '{branch}': {result.stderr}")
+                            
+                    except subprocess.TimeoutExpired:
+                        logger.error(f"Timeout while cloning repository with branch '{branch}'")
                     except Exception as e:
-                        logger.warning(f"Failed to clone using branch '{branch}': {str(e)}")
-                        # Continue to next branch
+                        logger.debug(f"Error cloning with branch '{branch}': {str(e)}")
                 
                 if not cloned:
-                    logger.error("Failed to clone repository with any of the attempted branches")
+                    logger.error("Failed to clone repository with any branch")
                     return {
-                        "error": f"Failed to clone repository. Tried branches: {', '.join(branches_to_try)}",
+                        "error": "Failed to clone repository. Check if the repository exists and is accessible.",
                         "valid": False,
-                        "scan_id": scan_id
-                    }
-                
-                # Filter for relevant files (e.g., .sol files for Solidity)
-                solidity_docs = [doc for doc in documents if doc.metadata.get('source', '').endswith('.sol')]
-                
-                if not solidity_docs:
-                    logger.warning(f"No Solidity files found in repository {repo_url}")
-                    return {
                         "scan_id": scan_id,
-                        "status": "completed",
                         "target": repo_url,
                         "input_type": "github_repo",
-                        "timestamp": datetime.now().isoformat(),
-                        "total_findings": 0,
-                        "findings": [],
-                        "summary": "No Solidity files found in repository"
+                        "timestamp": datetime.now().isoformat()
                     }
                 
-                logger.info(f"Found {len(solidity_docs)} Solidity files to scan")
+                # Find all relevant files for analysis
+                relevant_files = []
+                for root, dirs, files in os.walk(repo_dir):
+                    # Skip hidden directories and common non-source directories
+                    dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__', 'vendor']]
+                    
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Include various file types for analysis
+                        if any(file.endswith(ext) for ext in ['.sol', '.js', '.ts', '.py', '.java', '.go', '.rs', '.cpp', '.c', '.h']):
+                            relevant_files.append(file_path)
                 
-                # Process each Solidity file
-                scan_results = {"tool_results": []}
+                logger.info(f"Found {len(relevant_files)} relevant files for analysis")
+                
+                # Run traditional security scans
+                scan_results = {}
+                
+                # Perform AI audit analysis on Solidity files
                 ai_analysis_findings = []
+                solidity_files = [f for f in relevant_files if f.endswith('.sol')]
                 
-                for doc in solidity_docs:
-                    file_path = doc.metadata.get('source')
-                    file_content = doc.page_content
+                if solidity_files:
+                    logger.info(f"Found {len(solidity_files)} Solidity files for AI audit analysis")
                     
-                    logger.info(f"Scanning file: {file_path}")
-                    
-                    # Write content to a temporary file
-                    temp_file = os.path.join(repo_dir, os.path.basename(file_path))
-                    with open(temp_file, 'w') as f:
-                        f.write(file_content)
-                    
-                    # Get tools for Solidity
-                    selected_tools = self.tool_selector.select_tools("solidity_contract", [])
-                    
-                    # Scan the file with traditional security tools
-                    file_scan_results = self.scan_executor.execute_scans(
-                        {
-                            "type": "solidity_contract", 
-                            "input": temp_file,
-                            "source": "github_repo",
-                            "is_multiple": False
-                        },
-                        selected_tools
-                    )
-                    
-                    # Add to overall scan results
-                    scan_results["tool_results"].extend(file_scan_results.get("tool_results", []))
-                    
-                    # Perform AI audit analysis on this file
-                    try:
-                        logger.info(f"Performing AI audit analysis on {file_path}")
-                        contract_name = os.path.basename(file_path)
-                        ai_findings = self.ai_audit_analyzer.analyze_solidity_code(file_content, contract_name)
+                    # Use chunked analyzer for multiple files
+                    if len(solidity_files) > 1:
+                        logger.info("Using chunked AI analysis for multiple Solidity files")
+                        chunked_result = self.chunked_ai_audit_analyzer.analyze_github_repository(
+                            solidity_files, 
+                            repo_url=repo_url
+                        )
+                        ai_analysis_findings = chunked_result.get('findings', [])
                         
-                        # Add file information to AI findings
-                        for finding in ai_findings:
-                            finding['file'] = file_path
-                            finding['contract_name'] = contract_name
+                        # Add repository context to findings
+                        for finding in ai_analysis_findings:
                             finding['source'] = 'github_repo'
+                            finding['repository_url'] = repo_url
                         
-                        ai_analysis_findings.extend(ai_findings)
-                        logger.info(f"AI audit found {len(ai_findings)} findings in {file_path}")
-                        
-                    except Exception as e:
-                        logger.error(f"Error during AI audit analysis of {file_path}: {str(e)}")
+                        logger.info(f"Chunked AI audit found {len(ai_analysis_findings)} findings")
+                    else:
+                        # Single file analysis
+                        file_path = solidity_files[0]
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                file_content = f.read()
+                            
+                            logger.info(f"Performing AI audit analysis on {file_path}")
+                            contract_name = os.path.basename(file_path)
+                            ai_findings = self.ai_audit_analyzer.analyze_solidity_code(file_content, contract_name)
+                            
+                            # Add file information to AI findings
+                            for finding in ai_findings:
+                                finding['file'] = file_path
+                                finding['contract_name'] = contract_name
+                                finding['source'] = 'github_repo'
+                                finding['repository_url'] = repo_url
+                            
+                            ai_analysis_findings.extend(ai_findings)
+                            logger.info(f"AI audit found {len(ai_findings)} findings in {file_path}")
+                            
+                        except Exception as e:
+                            logger.error(f"Error during AI audit analysis of {file_path}: {str(e)}")
                 
                 # Aggregate traditional security tool results
                 aggregated_results = self.result_aggregator.aggregate_results(scan_results, [], {})
@@ -533,7 +547,7 @@ class SecurityAgent:
                     aggregated_results['ai_audit_findings'] = {
                         'total_findings': len(ai_analysis_findings),
                         'findings': ai_analysis_findings,
-                        'analyzer': 'AI Audit Analyzer (GPT-4o)',
+                        'analyzer': f'AI Audit Analyzer ({self.ai_audit_analyzer.model_name})',
                         'knowledge_base': 'Past audit reports database'
                     }
                     logger.info(f"Total AI audit findings: {len(ai_analysis_findings)}")
@@ -581,8 +595,12 @@ class SecurityAgent:
                     logger.warning(f"Failed to clean up temporary directory {repo_dir}: {str(e)}")
             
         except Exception as e:
-            logger.error(f"Unexpected error in scan_github_repo: {str(e)}", exc_info=True)
-            return {"error": f"Unexpected error: {str(e)}", "valid": False}
+            logger.error(f"Error in GitHub repository scan: {str(e)}", exc_info=True)
+            return {
+                "error": f"GitHub repository scan failed: {str(e)}",
+                "valid": False,
+                "timestamp": datetime.now().isoformat()
+            }
     
     def test_scan(self, file_paths: List[str]) -> Dict:
         """

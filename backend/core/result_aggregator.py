@@ -202,7 +202,7 @@ class ResultAggregator:
                 "total_findings": sum(len(findings) for findings in ai_findings_by_severity.values()),
                 "findings": ai_analysis_findings.get("findings", []) if ai_analysis_findings else [],
                 "findings_by_severity": ai_findings_by_severity,
-                "analyzer": ai_analysis_findings.get("analyzer", "AI Audit Analyzer (GPT-4o)") if ai_analysis_findings else None,
+                "analyzer": ai_analysis_findings.get("analyzer", "AI Audit Analyzer (GPT-4o-mini)") if ai_analysis_findings else None,
                 "knowledge_base": ai_analysis_findings.get("knowledge_base", "Past audit reports database") if ai_analysis_findings else None,
                 "severity_breakdown": dict(aggregated_results["stats"]["ai_findings_by_severity"])
             } if ai_analysis_findings and ai_analysis_findings.get("findings") else None

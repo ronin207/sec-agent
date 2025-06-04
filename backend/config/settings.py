@@ -48,6 +48,6 @@ DEFAULT_COLLECTION_NAME = "security_knowledge"
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 # API settings
-API_HOST = os.environ.get("API_HOST", "127.0.0.1")
+API_HOST = os.environ.get("API_HOST", "0.0.0.0")
 API_PORT = int(os.environ.get("API_PORT", 8080))  # Changed to 8080 since 5000 is used by macOS Control Center
 API_DEBUG = os.environ.get("API_DEBUG", "True").lower() == "true"

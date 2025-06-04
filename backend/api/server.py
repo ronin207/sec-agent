@@ -160,12 +160,25 @@ def scan_github_repo():
             os.environ["GITHUB_TOKEN"] = token
             logger.info("Using provided GitHub token for repository scan")
         
-        # Use the GitHub scanning method
+        # Use the GitHub scanning method with chunked processing
         result = security_agent.scan_github_repo(
             repo_url=repo_url,
             output_format=output_format,
             token=token
         )
+        
+        # Check if chunked processing was used and add metadata
+        if result.get('aggregated_results', {}).get('ai_audit_findings'):
+            ai_findings = result['aggregated_results']['ai_audit_findings']['findings']
+            
+            # Check if any findings have chunk information
+            has_chunking_info = any('chunk_id' in finding or 'chunk_info' in finding for finding in ai_findings)
+            if has_chunking_info:
+                result['processing_method'] = 'chunked_ai_analysis'
+                result['chunking_used'] = True
+            else:
+                result['processing_method'] = 'standard_ai_analysis'
+                result['chunking_used'] = False
         
         # Standardize the security findings using 4o-mini
         standardized_result = result_summarizer.standardize_security_findings(result.get('aggregated_results', {}))
@@ -431,6 +444,91 @@ def ai_audit_batch_endpoint():
             'status': 'error',
             'timestamp': datetime.now().isoformat(),
             'analysis_type': 'ai_audit_batch'
+        }), 500
+
+@app.route('/api/ai-audit/chunked', methods=['POST'])
+def ai_audit_chunked_endpoint():
+    """Chunked AI audit endpoint for processing large sets of Solidity files"""
+    try:
+        data = request.json
+        
+        # Validate required parameters
+        if 'files' not in data or not isinstance(data['files'], list):
+            return jsonify({
+                'error': 'Missing required parameter: files (array of file paths or file objects)',
+                'status': 'error'
+            }), 400
+        
+        files = data['files']
+        
+        # Handle both file paths and file objects with content
+        file_paths = []
+        temp_files = []
+        
+        try:
+            for i, file_item in enumerate(files):
+                if isinstance(file_item, str):
+                    # It's a file path
+                    if os.path.exists(file_item) and file_item.endswith('.sol'):
+                        file_paths.append(file_item)
+                elif isinstance(file_item, dict) and 'content' in file_item:
+                    # It's a file object with content
+                    file_name = file_item.get('name', f'contract_{i}.sol')
+                    if not file_name.endswith('.sol'):
+                        file_name += '.sol'
+                    
+                    # Create temporary file
+                    temp_file = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file_name))
+                    with open(temp_file, 'w', encoding='utf-8') as f:
+                        f.write(file_item['content'])
+                    
+                    file_paths.append(temp_file)
+                    temp_files.append(temp_file)
+        
+            if not file_paths:
+                return jsonify({
+                    'error': 'No valid Solidity files found in the provided files',
+                    'status': 'error'
+                }), 400
+        
+            logger.info(f"Performing chunked AI audit analysis on {len(file_paths)} Solidity files")
+            
+            # Use the chunked AI audit analyzer
+            from backend.core.chunked_ai_audit_analyzer import ChunkedAIAuditAnalyzer
+            chunked_analyzer = ChunkedAIAuditAnalyzer(model_name="gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY"))
+            
+            # Perform the analysis
+            result = chunked_analyzer.analyze_multiple_files(file_paths)
+            
+            # Add API-specific metadata
+            result.update({
+                'api_endpoint': 'chunked_ai_audit',
+                'timestamp': datetime.now().isoformat(),
+                'model_used': 'gpt-4o-mini',
+                'files_provided': len(files),
+                'files_processed': len(file_paths)
+            })
+            
+            logger.info(f"Chunked AI audit completed: {result.get('total_findings', 0)} findings from {len(file_paths)} files")
+            
+            return jsonify(result)
+            
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary file {temp_file}: {e}")
+        
+    except Exception as e:
+        logger.error(f"Error in chunked AI audit endpoint: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'status': 'error',
+            'timestamp': datetime.now().isoformat(),
+            'analysis_type': 'chunked_ai_audit'
         }), 500
 
 def start_server(host='127.0.0.1', port=8080):
