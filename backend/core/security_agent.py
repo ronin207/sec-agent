@@ -12,7 +12,7 @@ import uuid
 from urllib.parse import urlparse
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union, Tuple
-from langchain.document_loaders import GitLoader, TextLoader, DirectoryLoader
+from langchain_community.document_loaders import GitLoader, TextLoader, DirectoryLoader
 
 # Import from existing modules
 from backend.core.input_handler import InputHandler
