@@ -32,16 +32,25 @@ class CVEKnowledgeQuery:
     
     def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o"):
         """
-        Initialize the CVE Knowledge Query module.
+        Initialize the CVE Knowledge Base module.
         
         Args:
             api_key: OpenAI API key (falls back to environment variable)
-            model_name: Model to use for queries (default: gpt-4o)
+            model_name: Model to use for CVE queries (default: gpt-4o)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        logger.info(f"Initializing CVEKnowledgeQuery with API key: {'Set' if self.api_key else 'Not set'}")
+        logger.info(f"Initializing CVEKnowledgeBase with API key: {'Set' if self.api_key else 'Not set'}")
         self.model_name = model_name
-        self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
+        
+        # Use rate-limited version to avoid 429 errors
+        from backend.core.langchain_batch_wrapper import create_rate_limited_llm
+        self.llm = create_rate_limited_llm(
+            model=model_name, 
+            temperature=0.0, 
+            api_key=self.api_key,
+            rate_limit_ms=3000,  # 3 second rate limit
+            max_retries=5
+        )
         self.cve_loader = CVEDataLoader()
     
     def query_by_input_type(self, input_type: str, input_value: str) -> Dict:

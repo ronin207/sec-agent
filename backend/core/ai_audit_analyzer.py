@@ -194,7 +194,12 @@ class AIAuditAnalyzer:
                 logger.error("OpenAI API key is required for analysis")
                 return []
 
-            client = openai.OpenAI(api_key=api_key)
+            # Import the batch client
+            from backend.core.openai_batch_client import (
+                get_batch_client, 
+                create_chat_completion_request, 
+                BatchOptions
+            )
 
             message = f"Perform a comprehensive security audit on the following Solidity smart contract"
             if contract_name:
@@ -218,15 +223,29 @@ class AIAuditAnalyzer:
             """
 
             logger.info(f"Sending request to OpenAI for smart contract analysis of {contract_name}")
-            response = client.chat.completions.create(
+            
+            # Create a single request using the batch client
+            batch_client = get_batch_client(api_key)
+            request = create_chat_completion_request(
                 model="gpt-4o",  # Use a powerful model for code analysis
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": message}
-                ],
+                system_message=system_message,
+                user_message=message,
                 temperature=0.0,  # Use low temperature for deterministic results
                 max_tokens=4000
             )
+            
+            # Use batch client for single request with rate limiting and retry
+            batch_options = BatchOptions(
+                rate_limit_ms=2000,  # 2 second rate limit for safety
+                max_retries=5,
+                initial_backoff_ms=5000,  # Start with 5 second backoff for 429 errors
+                max_backoff_ms=60000,  # Max 60 second backoff
+                backoff_multiplier=2.0
+            )
+            
+            responses = batch_client.batch_chat_completions_sync([request], batch_options)
+            response = responses[0]
+            
             logger.info("Received response from OpenAI")
 
             # Parse the response to extract findings

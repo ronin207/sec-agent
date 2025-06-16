@@ -43,22 +43,31 @@ class ResultSummarizer:
     Generates human-readable summaries of security scan results using OpenAI API.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini"):
         """
         Initialize the Result Summarizer module.
         
         Args:
             api_key: OpenAI API key (falls back to environment variable)
-            model_name: Model to use for summaries (default: gpt-4o)
+            model_name: Model to use for summaries (default: gpt-4o-mini)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         logger.info(f"Initializing ResultSummarizer with API key: {'Set' if self.api_key else 'Not set'}")
         self.model_name = model_name
-        self.llm = ChatOpenAI(model=model_name, temperature=0.0, api_key=self.api_key)
+        
+        # Use rate-limited version to avoid 429 errors
+        from backend.core.langchain_batch_wrapper import create_rate_limited_llm
+        self.llm = create_rate_limited_llm(
+            model=model_name, 
+            temperature=0.0, 
+            api_key=self.api_key,
+            rate_limit_ms=1500,  # Reduced from 3000ms to 1500ms for faster processing
+            max_retries=5
+        )
     
     def extract_version_vulnerability_details(self, description: str) -> Dict[str, str]:
         """
-        Extract specific details about compiler version vulnerabilities using GPT-4o.
+        Extract specific details about compiler version vulnerabilities using GPT-4o-mini.
         
         Args:
             description: The vulnerability description containing version information

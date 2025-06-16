@@ -26,13 +26,22 @@ class SecurityKnowledgeBase:
     """
     
     def __init__(self, 
-                 model_name: str = "gpt-3.5-turbo", 
+                 model_name: str = "gpt-4o-mini", 
                  temperature: float = 0.0,
                  api_key: Optional[str] = None,
                  collection_name: str = "security_knowledge"):
         # Initialize the LLM with API key from environment variable if not provided
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.llm = ChatOpenAI(model_name=model_name, temperature=temperature, api_key=api_key)
+        
+        # Use rate-limited version to avoid 429 errors
+        from backend.core.langchain_batch_wrapper import create_rate_limited_llm
+        self.llm = create_rate_limited_llm(
+            model=model_name, 
+            temperature=temperature, 
+            api_key=api_key,
+            rate_limit_ms=3000,  # 3 second rate limit
+            max_retries=5
+        )
         
         # Initialize embeddings with API key
         self.embeddings = OpenAIEmbeddings(api_key=api_key)

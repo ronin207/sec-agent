@@ -867,7 +867,7 @@
           "contract_name": "test_contract.sol"
         }
       ],
-      "analyzer": "AI Audit Analyzer (GPT-4o)",
+      "analyzer": "AI Audit Analyzer (GPT-4o-mini)",
       "knowledge_base": "Past audit reports database"
     },
     "deduplication_stats": {

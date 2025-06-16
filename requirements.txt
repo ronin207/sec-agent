@@ -70,3 +70,6 @@ echidna-parade==0.2
 nvm install 18.18.2
 nvm use 18.18.2
 npm install -g npm@9.8.1
+
+# == OTHER DEPENDENCIES ==
+tiktoken>=0.5.0
