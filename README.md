@@ -154,74 +154,86 @@ A React-based user interface for the security agent.
 ```mermaid
 flowchart TD
     %% Entry Points
-    User((User)) --> WebInterface[Web Interface]
+    User((User)) --> WebInterface[React Frontend<br/>Port 3000]
+    WebInterface --> FlaskAPI[Flask API Server<br/>Port 8080]
 
-    %% Main Components
-    WebInterface --> SecurityAgent
+    %% Main Security Agent Component
+    FlaskAPI --> SecurityAgent[SecurityAgent<br/>Main Orchestrator]
 
-    %% Core modules
-    subgraph BackendCore[Backend Core]
-        SecurityAgent[SecurityAgent]
-        InputHandler[InputHandler]
-        CVEKnowledgeBase[CVEKnowledgeBase]
-        AIAuditAnalyzer[AI Audit Analyzer]
-        ToolSelector[ToolSelector]
-        ScanExecutor[ScanExecutor]
-        ResultAggregator[ResultAggregator]
-        ResultSummarizer[ResultSummarizer]
+    %% Core Analysis Flow
+    SecurityAgent --> InputHandler[InputHandler<br/>URL/File Validation]
+    SecurityAgent --> CVEQuery[CVE Knowledge Query<br/>Vulnerability Database]
+    
+    %% Parallel Analysis Paths
+    SecurityAgent --> TraditionalPath[Traditional Security Tools]
+    SecurityAgent --> AIPath[AI-Powered Analysis]
+
+    %% Traditional Security Analysis
+    subgraph TraditionalPath[Traditional Security Scanning]
+        ToolSelector[ToolSelector<br/>Select Security Tools]
+        ScanExecutor[ScanExecutor<br/>Execute Scans]
+        Slither[Slither<br/>Static Analysis Tool]
+        
+        ToolSelector --> ScanExecutor
+        ScanExecutor --> Slither
     end
 
-    %% Connections between core components
-    SecurityAgent --> InputHandler
-    SecurityAgent --> CVEKnowledgeBase
-    SecurityAgent --> AIAuditAnalyzer
-    SecurityAgent --> ToolSelector
-    SecurityAgent --> ScanExecutor
-    SecurityAgent --> ResultAggregator
-    SecurityAgent --> ResultSummarizer
+    %% AI-Powered Analysis Branch
+    subgraph AIPath[AI-Powered Smart Contract Analysis]
+        AIAnalyzer[AI Audit Analyzer<br/>Single File Analysis]
+        ChunkedAnalyzer[Chunked AI Analyzer<br/>Multi-File/Large Repos]
+        ChunkingManager[Chunking Manager<br/>File Splitting & Batching]
+        BatchClient[OpenAI Batch Client<br/>Rate-Limited Processing]
+        
+        AIAnalyzer --> OpenAI
+        ChunkedAnalyzer --> ChunkingManager
+        ChunkingManager --> BatchClient
+        BatchClient --> OpenAI
+    end
 
-    %% Data flow
-    InputHandler --> CVEKnowledgeBase
-    InputHandler --> AIAuditAnalyzer
-    CVEKnowledgeBase --> ToolSelector
-    AIAuditAnalyzer --> ResultAggregator
-    ToolSelector --> ScanExecutor
-    ScanExecutor --> ResultAggregator
+    %% Input Type Decision
+    InputHandler --> |"Single .sol file"| AIAnalyzer
+    InputHandler --> |"Multiple .sol files<br/>or GitHub repo"| ChunkedAnalyzer
+    InputHandler --> |"For Slither analysis"| ToolSelector
+
+    %% Result Processing
+    SecurityAgent --> ResultAggregator[Result Aggregator<br/>Merge & Deduplicate]
+    SecurityAgent --> ResultSummarizer[Result Summarizer<br/>Generate Reports]
+    
+    TraditionalPath --> ResultAggregator
+    AIPath --> ResultAggregator
     ResultAggregator --> ResultSummarizer
+    ResultSummarizer --> FlaskAPI
 
     %% External Services
-    OpenAI[OpenAI API]
-    GitHub[GitHub API]
-    AuditReports[(Past Audit Reports)]
-    
-    OpenAI -.-> CVEKnowledgeBase
-    OpenAI -.-> AIAuditAnalyzer
-    OpenAI -.-> ResultSummarizer
-    GitHub -.-> InputHandler
-    AuditReports -.-> AIAuditAnalyzer
-
-    %% Security Tools
-    subgraph SecurityTools[Security Tools]
-        Slither[Slither]
-        Mythril[Mythril]
-        Solhint[Solhint]
+    subgraph ExternalServices[External Services]
+        OpenAI[OpenAI API<br/>GPT-4o-mini/GPT-4o]
+        GitHub[GitHub API<br/>Repository Access]
+        CVEDatabase[(CVE Database<br/>Known Vulnerabilities)]
+        AuditReports[(Past Audit Reports<br/>Knowledge Base)]
     end
+    
+    CVEQuery -.-> CVEDatabase
+    ResultSummarizer -.-> OpenAI
+    InputHandler -.-> GitHub
+    AIAnalyzer -.-> AuditReports
+    ChunkedAnalyzer -.-> AuditReports
 
-    ScanExecutor --> SecurityTools
-
-    %% Result flow
-    ResultSummarizer --> WebInterface
+    %% Data Flow Types
+    SecurityAgent -.-> |"Metadata & Context"| ResultAggregator
 
     %% Styling
-    classDef core fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef external fill:#bfb,stroke:#333,stroke-width:1px;
-    classDef entry fill:#fbb,stroke:#333,stroke-width:2px;
-    classDef data fill:#bbf,stroke:#333,stroke-width:1px;
+    classDef core fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef analysis fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+    classDef external fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px;
+    classDef interface fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef processing fill:#fce4ec,stroke:#880e4f,stroke-width:2px;
 
-    class SecurityAgent,InputHandler,CVEKnowledgeBase,AIAuditAnalyzer,ToolSelector,ScanExecutor,ResultAggregator,ResultSummarizer core;
-    class OpenAI,GitHub external;
-    class WebInterface entry;
-    class AuditReports data;
+    class SecurityAgent,InputHandler,CVEQuery,ResultAggregator,ResultSummarizer core;
+    class AIAnalyzer,ChunkedAnalyzer,ChunkingManager,BatchClient,ToolSelector,ScanExecutor analysis;
+    class OpenAI,GitHub,CVEDatabase,AuditReports external;
+    class WebInterface,FlaskAPI interface;
+    class Slither processing;
 ```
 
 ## Dependency Management with UV
